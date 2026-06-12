@@ -33,7 +33,7 @@ See @eq:pythagoras and [@newton1687].
     assert "\\begin{equation}" in tex
     assert "\\label{eq:pythagoras}" in tex
     assert "\\cite{newton1687}" in tex
-    assert "\\ref{eq:pythagoras}" in tex
+    assert "\\eqref{eq:pythagoras}" in tex
 
 
 def test_figure():

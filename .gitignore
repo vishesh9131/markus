@@ -24,3 +24,4 @@ venv/
 vscode-markus/bundled/markus/
 vscode-markus/bundled/deps/
 .vscode-test/
+.aware/

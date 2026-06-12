@@ -8,15 +8,21 @@ from typing import Any
 
 from markus.ast import (
     Block,
+    BlockQuote,
     Cite,
+    CiteGroup,
     Code,
     CodeBlock,
     Document,
     Emphasis,
     Environment,
     Figure,
+    FootnoteDef,
+    FootnoteRef,
     Heading,
+    HorizontalRule,
     Inline,
+    LineBreak,
     Link,
     ListBlock,
     MathBlock,
@@ -24,17 +30,56 @@ from markus.ast import (
     Paragraph,
     RawLatex,
     Ref,
+    Strikeout,
     Strong,
     Table,
     Text,
 )
+from markus.parser import parse_inlines
 from markus.templates_registry import TemplateSpec, resolve_template
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
-_LISTING_LANGS = frozenset(
-    {"python", "py", "java", "c", "cpp", "rust", "go", "sql", "r", "matlab", "latex", "tex"}
-)
+# Languages the LaTeX `listings` package actually knows, keyed by common fence names.
+_LST_LANG_MAP = {
+    "python": "Python",
+    "py": "Python",
+    "java": "Java",
+    "c": "C",
+    "cpp": "C++",
+    "c++": "C++",
+    "csharp": "[Sharp]C",
+    "c#": "[Sharp]C",
+    "sql": "SQL",
+    "r": "R",
+    "matlab": "Matlab",
+    "octave": "Octave",
+    "go": "Go",
+    "bash": "bash",
+    "sh": "sh",
+    "zsh": "bash",
+    "shell": "bash",
+    "ruby": "Ruby",
+    "perl": "Perl",
+    "php": "PHP",
+    "haskell": "Haskell",
+    "fortran": "Fortran",
+    "pascal": "Pascal",
+    "html": "HTML",
+    "xml": "XML",
+    "latex": "[LaTeX]TeX",
+    "tex": "TeX",
+    "awk": "Awk",
+    "make": "make",
+    "makefile": "make",
+    "lisp": "Lisp",
+    "prolog": "Prolog",
+    "scala": "Scala",
+    "erlang": "erlang",
+    "vhdl": "VHDL",
+    "verilog": "Verilog",
+    "ada": "Ada",
+}
 
 # ^222 / _12 without braces → ^{222} / _{12} (LaTeX only groups one token after ^/_)
 _SCRIPT_OPERAND_RE = re.compile(
@@ -62,14 +107,34 @@ def _normalize_math_scripts(latex: str) -> str:
 def _math_latex(latex: str) -> str:
     return _normalize_math_scripts(latex.strip())
 
+
 ENV_MAP = {
-    "theorem": ("theorem", "Theorem"),
-    "lemma": ("lemma", "Lemma"),
-    "definition": ("definition", "Definition"),
-    "proof": ("proof", "Proof"),
-    "remark": ("remark", "Remark"),
-    "example": ("example", "Example"),
+    "theorem": "theorem",
+    "lemma": "lemma",
+    "definition": "definition",
+    "remark": "remark",
+    "example": "example",
+    "corollary": "corollary",
+    "proposition": "proposition",
 }
+
+# Callout boxes for informal writing; anything unknown also falls back to a callout
+# so the build never hits an undefined LaTeX environment.
+CALLOUT_TITLES = {
+    "note": "Note",
+    "warning": "Warning",
+    "tip": "Tip",
+    "info": "Info",
+    "important": "Important",
+    "caution": "Caution",
+    "danger": "Danger",
+    "todo": "TODO",
+}
+
+# Plain LaTeX environments that are safe to pass through verbatim.
+SAFE_PASSTHROUGH_ENVS = frozenset(
+    {"center", "flushleft", "flushright", "quote", "quotation", "verse"}
+)
 
 
 def emit(doc: Document, template: str = "article") -> str:
@@ -80,29 +145,112 @@ def emit(doc: Document, template: str = "article") -> str:
 
     skeleton = tpl_path.read_text(encoding="utf-8")
     meta = doc.meta
+    em = _Emitter(spec=spec, footnotes=doc.footnotes)
+
     title = _meta_str(meta, "title", "Untitled")
     authors = _format_authors(meta.get("author", meta.get("authors", "Author")), spec)
     abstract_raw = _meta_str(meta, "abstract", "").strip()
-    body = "\n\n".join(_emit_block(b, spec) for b in doc.blocks)
+    if spec.kind == "beamer":
+        body = _emit_body_beamer(doc.blocks, em)
+    else:
+        body = "\n\n".join(em.block(b) for b in doc.blocks)
+        body = re.sub(r"\n{3,}", "\n\n", body).strip()
 
     bib_block = _emit_bibliography(meta, spec)
+    date = meta.get("date")
+    date_tex = em.inline_text(str(date)) if date else r"\today"
 
     replacements = {
-        "% MARKUS_TITLE %": _latex_escape(title),
+        "% MARKUS_TITLE %": em.inline_text(title),
         "% MARKUS_AUTHORS %": authors,
-        "% MARKUS_ABSTRACT %": _emit_abstract_standard(abstract_raw),
-        "% MARKUS_ABSTRACT_RAW %": abstract_raw,
+        "% MARKUS_ABSTRACT %": _emit_abstract_standard(abstract_raw, em),
+        "% MARKUS_ABSTRACT_RAW %": em.inline_text(abstract_raw) if abstract_raw else "",
         "% MARKUS_KEYWORDS %": _emit_keywords_ieee(meta),
         "% MARKUS_KEYWORDS_ACM %": _emit_keywords_acm(meta),
+        "% MARKUS_KEYWORDS_STANDARD %": _emit_keywords_standard(meta),
         "% MARKUS_ACM_META %": _emit_acm_meta(meta),
+        "% MARKUS_DATE %": date_tex,
+        "% MARKUS_FROM_BLOCK %": _emit_letter_from(meta, em),
+        "% MARKUS_TO_BLOCK %": _emit_letter_to(meta, em),
+        "% MARKUS_SUBJECT_LINE %": _emit_letter_subject(meta, em),
+        "% MARKUS_COURSE %": em.inline_text(_meta_str(meta, "course", "")),
+        "% MARKUS_DUE %": em.inline_text(_meta_str(meta, "due", "")),
         "% MARKUS_BODY %": body,
         "% MARKUS_BIB %": bib_block,
     }
 
     out = skeleton
+    preamble = _markus_preamble(spec)
+    if "% MARKUS_PREAMBLE %" in out:
+        out = out.replace("% MARKUS_PREAMBLE %", preamble)
+    else:
+        out = out.replace("\\begin{document}", preamble + "\n\\begin{document}", 1)
+    # legacy templates hardcode \date{\today}
+    if date and "% MARKUS_DATE %" not in skeleton:
+        out = out.replace("\\date{\\today}", f"\\date{{{date_tex}}}", 1)
     for key, val in replacements.items():
         out = out.replace(key, val)
     return out
+
+
+def _markus_preamble(spec: TemplateSpec) -> str:
+    """Definitions every generated document relies on, injected into all templates."""
+    lines = [
+        "% --- injected by markus ---",
+        "\\usepackage{graphicx}",
+        "\\usepackage{amssymb}",
+        "\\usepackage{textcomp}",
+        "\\usepackage[normalem]{ulem}",
+        "\\providecommand{\\markusopenbox}{\\mbox{$\\square$}}",
+        "\\providecommand{\\markuscheckedbox}{\\mbox{\\rlap{\\hspace{0.14em}"
+        "\\raisebox{0.12ex}{\\scriptsize$\\checkmark$}}$\\square$}}",
+        "\\newenvironment{markuscallout}[1]"
+        "{\\par\\medskip\\begin{quote}\\noindent\\textbf{#1:}\\space}"
+        "{\\end{quote}\\medskip}",
+    ]
+    if spec.kind != "beamer":
+        # theorem environments for templates that don't define their own
+        lines += [
+            "\\usepackage{amsthm}",
+            "\\makeatletter",
+            "\\@ifundefined{theorem}{\\newtheorem{theorem}{Theorem}}{}",
+            "\\@ifundefined{lemma}{\\newtheorem{lemma}[theorem]{Lemma}}{}",
+            "\\@ifundefined{definition}{\\newtheorem{definition}[theorem]{Definition}}{}",
+            "\\@ifundefined{remark}{\\newtheorem{remark}[theorem]{Remark}}{}",
+            "\\@ifundefined{example}{\\newtheorem{example}[theorem]{Example}}{}",
+            "\\@ifundefined{corollary}{\\newtheorem{corollary}[theorem]{Corollary}}{}",
+            "\\@ifundefined{proposition}{\\newtheorem{proposition}[theorem]{Proposition}}{}",
+            "\\makeatother",
+        ]
+    if not spec.floats:
+        lines.append("\\usepackage{caption}")
+    lines.append("% --- end markus preamble ---")
+    return "\n".join(lines)
+
+
+def _emit_body_beamer(blocks: list[Block], em: _Emitter) -> str:
+    out: list[str] = []
+    open_frame = False
+    for b in blocks:
+        if isinstance(b, Heading) and b.level == 1:
+            if open_frame:
+                out.append("\\end{frame}")
+                open_frame = False
+            out.append(f"\\section{{{em.inline_text(b.text)}}}")
+            continue
+        if isinstance(b, Heading) and b.level == 2:
+            if open_frame:
+                out.append("\\end{frame}")
+            out.append(f"\\begin{{frame}}[fragile]{{{em.inline_text(b.text)}}}")
+            open_frame = True
+            continue
+        if not open_frame:
+            out.append("\\begin{frame}[fragile]")
+            open_frame = True
+        out.append(em.block(b))
+    if open_frame:
+        out.append("\\end{frame}")
+    return "\n\n".join(out)
 
 
 def _emit_bibliography(meta: dict[str, Any], spec: TemplateSpec) -> str:
@@ -111,8 +259,6 @@ def _emit_bibliography(meta: dict[str, Any], spec: TemplateSpec) -> str:
         return ""
     style = _meta_str(meta, "bibstyle", spec.default_bibstyle)
     stem = Path(str(bib)).stem
-    if spec.author_mode == "acm":
-        return f"\\bibliographystyle{{{_escape_key(style)}}}\n\\bibliography{{{_escape_key(stem)}}}"
     return (
         f"\\bibliographystyle{{{_escape_key(style)}}}\n"
         f"\\bibliography{{{_escape_key(stem)}}}"
@@ -122,6 +268,35 @@ def _emit_bibliography(meta: dict[str, Any], spec: TemplateSpec) -> str:
 def _meta_str(meta: dict[str, Any], key: str, default: str) -> str:
     v = meta.get(key, default)
     return str(v) if v is not None else default
+
+
+def _meta_lines(meta: dict[str, Any], *keys: str) -> list[str]:
+    for key in keys:
+        v = meta.get(key)
+        if v:
+            return [ln.strip() for ln in str(v).splitlines() if ln.strip()]
+    return []
+
+
+def _emit_letter_from(meta: dict[str, Any], em: _Emitter) -> str:
+    lines = _meta_lines(meta, "from", "sender")
+    if not lines:
+        return ""
+    return "\\\\\n".join(em.inline_text(ln) for ln in lines) + "\\\\[0.6em]"
+
+
+def _emit_letter_to(meta: dict[str, Any], em: _Emitter) -> str:
+    lines = _meta_lines(meta, "to", "recipient")
+    if not lines:
+        return ""
+    return "\\\\\n".join(em.inline_text(ln) for ln in lines)
+
+
+def _emit_letter_subject(meta: dict[str, Any], em: _Emitter) -> str:
+    subject = meta.get("subject")
+    if not subject:
+        return ""
+    return f"\\noindent\\textbf{{Subject: {em.inline_text(str(subject))}}}\\par\\medskip"
 
 
 def _format_authors(raw: Any, spec: TemplateSpec) -> str:
@@ -149,7 +324,7 @@ def _format_authors_standard(raw: Any) -> str:
             if affil:
                 part += f"\\\\\n\\textit{{{_latex_escape(str(affil))}}}"
             if email:
-                part += f"\\\\\n\\texttt{{{_latex_escape(str(email))}}}"
+                part += f"\\\\\n\\texttt{{{_latex_escape(str(email), quotes=False)}}}"
             blocks.append(f"\\author{{{part}}}")
         else:
             blocks.append(f"\\author{{{_latex_escape(str(entry))}}}")
@@ -182,7 +357,7 @@ def _format_authors_ieee(raw: Any) -> str:
             email = entry.get("email") or ""
             dept = entry.get("department") or ""
             lines = [x for x in (dept, affil, email) if x]
-            affil_tex = "\\\\\n".join(_latex_escape(str(x)) for x in lines)
+            affil_tex = "\\\\\n".join(_latex_escape(str(x), quotes=False) for x in lines)
             blocks.append(
                 f"\\IEEEauthorblockN{{{name}}}\n\\IEEEauthorblockA{{{affil_tex}}}"
             )
@@ -213,9 +388,9 @@ def _format_authors_acm(raw: Any) -> str:
             if affil:
                 attrs.append(f"affiliation={{{_latex_escape(str(affil))}}}")
             if email:
-                attrs.append(f"email={{{_latex_escape(str(email))}}}")
+                attrs.append(f"email={{{_latex_escape(str(email), quotes=False)}}}")
             if orcid:
-                attrs.append(f"orcid={{{_latex_escape(str(orcid))}}}")
+                attrs.append(f"orcid={{{_latex_escape(str(orcid), quotes=False)}}}")
             if attrs:
                 blocks.append(f"\\author[{', '.join(attrs)}]{{{name}}}")
             else:
@@ -237,14 +412,17 @@ def _emit_acm_meta(meta: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _emit_keywords_ieee(meta: dict[str, Any]) -> str:
+def _keyword_items(meta: dict[str, Any]) -> list[str]:
     kw = meta.get("keywords")
     if not kw:
-        return ""
+        return []
     if isinstance(kw, str):
-        items = [k.strip() for k in kw.split(",") if k.strip()]
-    else:
-        items = [str(k) for k in kw]
+        return [k.strip() for k in kw.split(",") if k.strip()]
+    return [str(k) for k in kw]
+
+
+def _emit_keywords_ieee(meta: dict[str, Any]) -> str:
+    items = _keyword_items(meta)
     if not items:
         return ""
     body = ", ".join(_latex_escape(k) for k in items)
@@ -252,23 +430,25 @@ def _emit_keywords_ieee(meta: dict[str, Any]) -> str:
 
 
 def _emit_keywords_acm(meta: dict[str, Any]) -> str:
-    kw = meta.get("keywords")
-    if not kw:
-        return ""
-    if isinstance(kw, str):
-        items = [k.strip() for k in kw.split(",") if k.strip()]
-    else:
-        items = [str(k) for k in kw]
+    items = _keyword_items(meta)
     if not items:
         return ""
     body = ", ".join(_latex_escape(k) for k in items)
     return f"\\keywords{{{body}}}\n"
 
 
-def _emit_abstract_standard(text: str) -> str:
+def _emit_keywords_standard(meta: dict[str, Any]) -> str:
+    items = _keyword_items(meta)
+    if not items:
+        return ""
+    body = ", ".join(_latex_escape(k) for k in items)
+    return f"\\par\\medskip\\noindent\\textbf{{Keywords:}} {body}\\par\n"
+
+
+def _emit_abstract_standard(text: str, em: _Emitter) -> str:
     if not text.strip():
         return ""
-    return f"\\begin{{abstract}}\n{text.strip()}\n\\end{{abstract}}\n"
+    return f"\\begin{{abstract}}\n{em.inline_text(text.strip())}\n\\end{{abstract}}\n"
 
 
 def _qual_label(kind: str, label: str | None) -> str | None:
@@ -279,55 +459,249 @@ def _qual_label(kind: str, label: str | None) -> str | None:
     return f"{kind}:{label}"
 
 
+_VERBATIM_MAP = {
+    "→": "->",
+    "⇒": "=>",
+    "←": "<-",
+    "⇐": "<=",
+    "—": "--",
+    "–": "-",
+    "…": "...",
+    "✓": "[x]",
+    "✔": "[x]",
+    "✅": "[x]",
+    "✗": "[ ]",
+    "✘": "[ ]",
+    "❌": "[ ]",
+    "•": "*",
+    "“": '"',
+    "”": '"',
+    "‘": "'",
+    "’": "'",
+    " ": " ",
+}
+
+
 def _sanitize_verbatim(text: str) -> str:
-    repl = {
-        "→": "->",
-        "←": "<-",
-        "—": "--",
-        "–": "-",
-        "…": "...",
-        "\u201c": '"',
-        "\u201d": '"',
-        "\u2018": "'",
-        "\u2019": "'",
-    }
-    out = text
-    for src, dst in repl.items():
-        out = out.replace(src, dst)
-    return out
+    out = []
+    for ch in text:
+        if ch in _VERBATIM_MAP:
+            out.append(_VERBATIM_MAP[ch])
+        elif ord(ch) >= 0x2000:
+            out.append("?")
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+# Unicode prose characters pdflatex cannot digest, mapped to LaTeX equivalents.
+UNICODE_MAP = {
+    "→": r"$\rightarrow$",
+    "⇒": r"$\Rightarrow$",
+    "←": r"$\leftarrow$",
+    "⇐": r"$\Leftarrow$",
+    "↔": r"$\leftrightarrow$",
+    "↑": r"$\uparrow$",
+    "↓": r"$\downarrow$",
+    "✓": r"$\checkmark$",
+    "✔": r"$\checkmark$",
+    "✅": r"$\checkmark$",
+    "✗": r"$\times$",
+    "✘": r"$\times$",
+    "❌": r"$\times$",
+    "•": r"\textbullet{}",
+    "·": r"$\cdot$",
+    "±": r"$\pm$",
+    "×": r"$\times$",
+    "÷": r"$\div$",
+    "≤": r"$\leq$",
+    "≥": r"$\geq$",
+    "≠": r"$\neq$",
+    "≈": r"$\approx$",
+    "∈": r"$\in$",
+    "∞": r"$\infty$",
+    "°": r"$^{\circ}$",
+    "µ": r"$\mu$",
+    "α": r"$\alpha$",
+    "β": r"$\beta$",
+    "γ": r"$\gamma$",
+    "δ": r"$\delta$",
+    "ε": r"$\varepsilon$",
+    "θ": r"$\theta$",
+    "λ": r"$\lambda$",
+    "π": r"$\pi$",
+    "σ": r"$\sigma$",
+    "τ": r"$\tau$",
+    "φ": r"$\varphi$",
+    "ω": r"$\omega$",
+    "Δ": r"$\Delta$",
+    "Σ": r"$\Sigma$",
+    "Ω": r"$\Omega$",
+    "™": r"\texttrademark{}",
+    "©": r"\textcopyright{}",
+    "®": r"\textregistered{}",
+    "€": r"\texteuro{}",
+    "£": r"\pounds{}",
+    "₹": "Rs.~",
+    "…": r"\ldots{}",
+    "—": "---",
+    "–": "--",
+    "“": "``",
+    "”": "''",
+    "‘": "`",
+    "’": "'",
+    " ": "~",
+}
+
+_ESCAPE_MAP = {
+    "\\": r"\textbackslash{}",
+    "&": r"\&",
+    "%": r"\%",
+    "$": r"\$",
+    "#": r"\#",
+    "_": r"\_",
+    "{": r"\{",
+    "}": r"\}",
+    "~": r"\textasciitilde{}",
+    "^": r"\textasciicircum{}",
+}
+
+
+def _smart_quotes(s: str) -> str:
+    s = re.sub(r'(^|[\s(\[{])"', r"\1``", s)
+    s = s.replace('"', "''")
+    s = re.sub(r"(^|[\s(\[{])'", r"\1`", s)
+    return s
+
+
+def _latex_escape(s: str, quotes: bool = True) -> str:
+    out = []
+    for ch in s:
+        if ch in _ESCAPE_MAP:
+            out.append(_ESCAPE_MAP[ch])
+        elif ch in UNICODE_MAP:
+            out.append(UNICODE_MAP[ch])
+        elif ord(ch) >= 0x2000:
+            # unsupported symbol/emoji: drop it (markus check reports these)
+            continue
+        else:
+            out.append(ch)
+    text = "".join(out)
+    if quotes:
+        text = _smart_quotes(text)
+    return text
+
+
+def _escape_url(url: str) -> str:
+    # \href reads its argument almost verbatim; only % and # need help
+    return url.replace("%", r"\%").replace("#", r"\#")
+
+
+def _escape_path(p: str) -> str:
+    return p.replace("\\", "/")
+
+
+def _escape_key(k: str) -> str:
+    return re.sub(r"[^\w:,-]", "", k)
 
 
 def _emit_code_block(block: CodeBlock) -> str:
     code = _sanitize_verbatim(block.code)
     lang = (block.language or "").lower()
-    if lang in _LISTING_LANGS:
-        return f"\\begin{{lstlisting}}[language={lang}]\n{code}\n\\end{{lstlisting}}"
-    return f"\\begin{{verbatim}}\n{code}\n\\end{{verbatim}}"
+    lst = _LST_LANG_MAP.get(lang)
+    if lst:
+        return f"\\begin{{lstlisting}}[language={{{lst}}}]\n{code}\n\\end{{lstlisting}}"
+    return f"\\begin{{lstlisting}}\n{code}\n\\end{{lstlisting}}"
 
 
-def _emit_block(block: Block, spec: TemplateSpec | None = None) -> str:
-    if isinstance(block, Heading):
-        cmd = {1: "section", 2: "subsection", 3: "subsubsection"}.get(
-            block.level, "paragraph"
-        )
-        out = f"\\{cmd}{{{_latex_escape(block.text)}}}"
-        ql = _qual_label("sec", block.label)
-        if ql:
-            out += f"\n\\label{{{ql}}}"
-        return out
+class _Emitter:
+    def __init__(self, spec: TemplateSpec, footnotes: dict[str, list[Inline]]):
+        self.spec = spec
+        self.footnotes = footnotes
 
-    if isinstance(block, Paragraph):
-        return _emit_inlines(block.inlines)
+    # --- helpers ---
 
-    if isinstance(block, MathBlock):
-        out = f"\\begin{{equation}}\n{_math_latex(block.latex)}\n\\end{{equation}}"
+    def inline_text(self, raw: str) -> str:
+        """Parse a raw string (heading, caption, title) as Markus inline markup."""
+        return self.inlines(parse_inlines(raw))
+
+    def heading_cmd(self, level: int) -> str:
+        if self.spec.chapters:
+            return {
+                1: "chapter",
+                2: "section",
+                3: "subsection",
+                4: "subsubsection",
+                5: "paragraph",
+            }.get(level, "subparagraph")
+        return {
+            1: "section",
+            2: "subsection",
+            3: "subsubsection",
+            4: "paragraph",
+        }.get(level, "subparagraph")
+
+    # --- blocks ---
+
+    def block(self, block: Block) -> str:
+        if isinstance(block, Heading):
+            out = f"\\{self.heading_cmd(block.level)}{{{self.inline_text(block.text)}}}"
+            ql = _qual_label("sec", block.label)
+            if ql:
+                out += f"\n\\label{{{ql}}}"
+            return out
+
+        if isinstance(block, Paragraph):
+            return self.inlines(block.inlines)
+
+        if isinstance(block, MathBlock):
+            return self.math_block(block)
+
+        if isinstance(block, Figure):
+            return self.figure(block)
+
+        if isinstance(block, CodeBlock):
+            return _emit_code_block(block)
+
+        if isinstance(block, RawLatex):
+            return block.content
+
+        if isinstance(block, ListBlock):
+            return self.list_block(block)
+
+        if isinstance(block, Table):
+            return self.table(block)
+
+        if isinstance(block, BlockQuote):
+            inner = "\n\n".join(self.block(b) for b in block.blocks)
+            return f"\\begin{{quote}}\n{inner}\n\\end{{quote}}"
+
+        if isinstance(block, HorizontalRule):
+            return "\\par\\medskip\\noindent\\rule{\\linewidth}{0.4pt}\\par\\medskip"
+
+        if isinstance(block, FootnoteDef):
+            return ""  # inlined at the reference site
+
+        if isinstance(block, Environment):
+            return self.environment(block)
+
+        return ""
+
+    def math_block(self, block: MathBlock) -> str:
+        latex = _math_latex(block.latex)
         ql = _qual_label("eq", block.label)
-        if ql:
-            out += f"\n\\label{{{ql}}}"
-        return out
+        label_tex = f"\\label{{{ql}}}\n" if ql else ""
+        if "\\begin{" in latex:
+            # user provided a full environment (align, cases, ...) — pass through
+            return latex
+        if "\\\\" in latex:
+            env = "align" if "&" in latex else "gather"
+            return f"\\begin{{{env}}}\n{label_tex}{latex}\n\\end{{{env}}}"
+        return f"\\begin{{equation}}\n{label_tex}{latex}\n\\end{{equation}}"
 
-    if isinstance(block, Figure):
-        default_w = r"0.8\columnwidth" if spec and spec.columns >= 2 else r"0.8\textwidth"
+    def figure(self, block: Figure) -> str:
+        spec = self.spec
+        default_w = r"0.8\columnwidth" if spec.columns >= 2 else r"0.8\textwidth"
         width = block.width or default_w
         if (
             not width.startswith("\\")
@@ -336,119 +710,153 @@ def _emit_block(block: Block, spec: TemplateSpec | None = None) -> str:
             and width.replace(".", "").isdigit()
         ):
             width = f"{width}\\textwidth"
-        cap = _latex_escape(block.caption) if block.caption else ""
+        cap = self.inline_text(block.caption) if block.caption else ""
+        graphic = f"\\includegraphics[width={width}]{{{_escape_path(block.path)}}}"
+        ql = _qual_label("fig", block.label)
+        if not spec.floats:
+            out = "\\begin{center}\n" + graphic + "\n"
+            if cap:
+                out += f"\\captionof{{figure}}{{{cap}}}\n"
+            if ql:
+                out += f"\\label{{{ql}}}\n"
+            out += "\\end{center}"
+            return out
         out = (
-            "\\begin{figure}[!t]\n"
+            "\\begin{figure}[htbp]\n"
             "\\centering\n"
-            f"\\includegraphics[width={width}]{{{_escape_path(block.path)}}}\n"
+            f"{graphic}\n"
             f"\\caption{{{cap}}}\n"
         )
-        ql = _qual_label("fig", block.label)
         if ql:
             out += f"\\label{{{ql}}}\n"
         out += "\\end{figure}"
         return out
 
-    if isinstance(block, CodeBlock):
-        return _emit_code_block(block)
-
-    if isinstance(block, RawLatex):
-        return block.content
-
-    if isinstance(block, ListBlock):
+    def list_block(self, block: ListBlock) -> str:
         env = "enumerate" if block.ordered else "itemize"
-        items = "\n".join(f"  \\item {_emit_inlines(item)}" for item in block.items)
-        return f"\\begin{{{env}}}\n{items}\n\\end{{{env}}}"
+        lines = [f"\\begin{{{env}}}"]
+        for item in block.items:
+            if item.checked is None:
+                prefix = "\\item"
+            elif item.checked:
+                prefix = "\\item[\\markuscheckedbox]"
+            else:
+                prefix = "\\item[\\markusopenbox]"
+            text = self.inlines(item.inlines)
+            lines.append(f"  {prefix} {text}".rstrip())
+            for child in item.children:
+                child_tex = self.block(child)
+                lines.append("\n".join("  " + ln for ln in child_tex.splitlines()))
+        lines.append(f"\\end{{{env}}}")
+        return "\n".join(lines)
 
-    if isinstance(block, Table):
-        cols = len(block.headers)
-        align = "l" * cols
-        header = " & ".join(_latex_escape(h) for h in block.headers) + r" \\"
+    def table(self, block: Table) -> str:
+        ncols = len(block.headers)
+        aligns = block.aligns or ["l"] * ncols
+        align = "".join(aligns[:ncols]) or "l" * ncols
+        header = " & ".join(self.inlines(h) for h in block.headers) + r" \\"
         rows = [
-            " & ".join(_latex_escape(c) for c in row) + r" \\"
+            " & ".join(self.inlines(c) for c in row) + r" \\"
             for row in block.rows
         ]
-        out = (
-            "\\begin{table}[!t]\n\\centering\n"
-            f"\\begin{{tabular}}{{{align}}}\n\\hline\n"
-            f"{header}\n\\hline\n"
-            + "\n".join(rows)
-            + "\n\\hline\n\\end{tabular}\n"
-        )
-        if block.caption:
-            out += f"\\caption{{{_latex_escape(block.caption)}}}\n"
+        cap = self.inline_text(block.caption) if block.caption else ""
         ql = _qual_label("tbl", block.label)
+        tabular = (
+            f"\\begin{{tabular}}{{{align}}}\n\\toprule\n"
+            f"{header}\n\\midrule\n"
+            + "\n".join(rows)
+            + "\n\\bottomrule\n\\end{tabular}"
+        )
+        if not self.spec.floats:
+            out = "\\begin{center}\n"
+            if cap:
+                out += f"\\captionof{{table}}{{{cap}}}\n"
+            if ql:
+                out += f"\\label{{{ql}}}\n"
+            out += tabular + "\n\\end{center}"
+            return out
+        out = "\\begin{table}[htbp]\n\\centering\n"
+        if cap:
+            out += f"\\caption{{{cap}}}\n"
         if ql:
             out += f"\\label{{{ql}}}\n"
-        out += "\\end{table}"
+        out += tabular + "\n\\end{table}"
         return out
 
-    if isinstance(block, Environment):
+    def environment(self, block: Environment) -> str:
         kind = block.kind.lower()
+        inner = "\n\n".join(self.block(b) for b in block.blocks)
+
         if kind == "proof":
-            title = f"[{_latex_escape(block.title)}]" if block.title else ""
-            inner = "\n\n".join(_emit_block(b, spec) for b in block.blocks)
+            title = f"[{self.inline_text(block.title)}]" if block.title else ""
             return f"\\begin{{proof}}{title}\n{inner}\n\\end{{proof}}"
 
-        env_name, _ = ENV_MAP.get(kind, (kind, kind.title()))
-        inner = "\n\n".join(_emit_block(b, spec) for b in block.blocks)
-        if block.title:
-            return (
-                f"\\begin{{{env_name}}}[{_latex_escape(block.title)}]\n"
-                f"{inner}\n\\end{{{env_name}}}"
-            )
-        return f"\\begin{{{env_name}}}\n{inner}\n\\end{{{env_name}}}"
+        if kind in ENV_MAP:
+            env_name = ENV_MAP[kind]
+            if block.title:
+                return (
+                    f"\\begin{{{env_name}}}[{self.inline_text(block.title)}]\n"
+                    f"{inner}\n\\end{{{env_name}}}"
+                )
+            return f"\\begin{{{env_name}}}\n{inner}\n\\end{{{env_name}}}"
 
-    return ""
+        if kind in SAFE_PASSTHROUGH_ENVS:
+            return f"\\begin{{{kind}}}\n{inner}\n\\end{{{kind}}}"
 
+        # callouts and anything unknown → built-in box, never an undefined env
+        title = (
+            self.inline_text(block.title)
+            if block.title
+            else CALLOUT_TITLES.get(kind, kind.title())
+        )
+        return f"\\begin{{markuscallout}}{{{title}}}\n{inner}\n\\end{{markuscallout}}"
 
-def _emit_inlines(nodes: list[Inline]) -> str:
-    parts: list[str] = []
-    for n in nodes:
-        if isinstance(n, Text):
-            parts.append(_latex_escape(n.value))
-        elif isinstance(n, Strong):
-            parts.append(f"\\textbf{{{_emit_inlines(n.children)}}}")
-        elif isinstance(n, Emphasis):
-            parts.append(f"\\textit{{{_emit_inlines(n.children)}}}")
-        elif isinstance(n, Code):
-            parts.append(f"\\texttt{{{_latex_escape(n.value)}}}")
-        elif isinstance(n, MathInline):
-            parts.append(f"${_math_latex(n.latex)}$")
-        elif isinstance(n, Cite):
-            parts.append(f"\\cite{{{_escape_key(n.key)}}}")
-        elif isinstance(n, Ref):
-            parts.append(f"\\ref{{{n.kind}:{n.label}}}")
-        elif isinstance(n, Link):
-            parts.append(f"\\href{{{_latex_escape(n.url)}}}{{{_latex_escape(n.text)}}}")
-    return "".join(parts)
+    # --- inlines ---
 
-
-def _latex_escape(s: str) -> str:
-    repl = {
-        "\\": r"\textbackslash{}",
-        "&": r"\&",
-        "%": r"\%",
-        "$": r"\$",
-        "#": r"\#",
-        "_": r"\_",
-        "{": r"\{",
-        "}": r"\}",
-        "~": r"\textasciitilde{}",
-        "^": r"\textasciicircum{}",
-    }
-    out = []
-    for ch in s:
-        out.append(repl.get(ch, ch))
-    return "".join(out)
-
-
-def _escape_path(p: str) -> str:
-    return p.replace("\\", "/").replace(" ", r"\ ")
-
-
-def _escape_key(k: str) -> str:
-    return re.sub(r"[^\w:-]", "", k)
+    def inlines(self, nodes: list[Inline]) -> str:
+        parts: list[str] = []
+        for n in nodes:
+            if isinstance(n, Text):
+                parts.append(_latex_escape(n.value))
+            elif isinstance(n, Strong):
+                parts.append(f"\\textbf{{{self.inlines(n.children)}}}")
+            elif isinstance(n, Emphasis):
+                parts.append(f"\\textit{{{self.inlines(n.children)}}}")
+            elif isinstance(n, Strikeout):
+                parts.append(f"\\sout{{{self.inlines(n.children)}}}")
+            elif isinstance(n, Code):
+                parts.append(f"\\texttt{{{_latex_escape(n.value, quotes=False)}}}")
+            elif isinstance(n, MathInline):
+                parts.append(f"${_math_latex(n.latex)}$")
+            elif isinstance(n, Cite):
+                parts.append(f"\\cite{{{_escape_key(n.key)}}}")
+            elif isinstance(n, CiteGroup):
+                keys = ",".join(_escape_key(k) for k in n.keys)
+                parts.append(f"\\cite{{{keys}}}")
+            elif isinstance(n, Ref):
+                target = f"{n.kind}:{n.label}"
+                if n.kind == "eq":
+                    parts.append(f"\\eqref{{{target}}}")
+                else:
+                    parts.append(f"\\ref{{{target}}}")
+            elif isinstance(n, FootnoteRef):
+                content = self.footnotes.get(n.key)
+                if content is None:
+                    parts.append("\\footnote{??}")
+                else:
+                    parts.append(f"\\footnote{{{self.inlines(content)}}}")
+            elif isinstance(n, LineBreak):
+                parts.append("\\\\\n")
+            elif isinstance(n, Link):
+                if n.text.strip() == n.url.strip():
+                    parts.append(f"\\url{{{_escape_url(n.url)}}}")
+                else:
+                    parts.append(
+                        f"\\href{{{_escape_url(n.url)}}}{{{_latex_escape(n.text)}}}"
+                    )
+        out = "".join(parts)
+        # a trailing forced break crashes LaTeX at paragraph end
+        return out.rstrip("\n").removesuffix("\\\\").rstrip()
 
 
 def write_tex(doc: Document, out_path: Path, template: str = "article") -> Path:

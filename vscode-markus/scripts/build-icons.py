@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = Path(__file__).resolve().parents[1] / "icons"
 
 LOGO_CANDIDATES = (
-    ROOT / "mkc_fi_logo_transparent1.png",
-    ROOT / "mkc_fi_logo_transparent.png",
+    ROOT / "assets" / "branding" / "mkc_fi_logo_transparent1.png",
+    ROOT / "assets" / "branding" / "mkc_fi_logo_transparent.png",
 )
 
 

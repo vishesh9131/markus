@@ -1,6 +1,6 @@
 # Markus
 
-Write academic manuscripts in a **Markdown-like** syntax (`.mks`), compile to **LaTeX-quality PDF**.
+Write research papers, notes, todos, lecture handouts, letters and notices in a **Markdown-like** syntax (`.mks`), compile to **LaTeX-quality PDF**.
 
 ```bash
 pip install -e .
@@ -30,8 +30,7 @@ Inline math $E=mc^2$ and [@smith2020]. See @sec:intro.
 
 $$
 \int_0^1 x^2\,dx = \frac{1}{3}
-$$
-{#eq:integral}
+$$ {#eq:integral}
 ```
 
 ```bash
@@ -45,15 +44,30 @@ markus build paper.mks
 |---------|--------|--------------|
 | Section | `# Title {#sec:id}` | `\section` + `\label{sec:id}` |
 | Bold / italic | `**b**` / `*i*` | `\textbf` / `\textit` |
+| Strikethrough | `~~old~~` | `\sout{old}` |
 | Inline math | `$...$` | `$...$` |
-| Display math | `$$...$$` then `{#eq:id}` | `equation` + `\label{eq:id}` |
-| Citation | `[@key]` | `\cite{key}` |
-| Reference | `@fig:id`, `@eq:id`, `@sec:id`, `@tbl:id` | `\ref{...}` |
-| Figure | `![cap](path){#fig:id width=0.8\textwidth}` | `figure` + `\includegraphics` |
-| Theorem | `::: theorem Title` ... `:::` | `\begin{theorem}` |
-| Proof | `::: proof` ... `:::` | `\begin{proof}` |
+| Display math | `$$...$$ {#eq:id}` (label same line or next) | `equation` + `\label` |
+| Multi-line math | `$$ a &= b \\ c &= d $$` | `align` (or `gather` without `&`) |
+| Citation | `[@key]`, `[@a; @b]`, or bare `@key` | `\cite{key}`, `\cite{a,b}` |
+| Reference | `@fig:id`, `@eq:id`, `@sec:id`, `@tbl:id` | `\ref` / `\eqref` |
+| Footnote | `text[^1]` then `[^1]: note` | `\footnote{note}` |
+| Figure | `![cap](path){#fig:id width=0.8}` | `figure` + `\includegraphics` |
+| Task list | `- [ ] todo` / `- [x] done` | checkbox items |
+| Nested list | indent 2 spaces | nested `itemize`/`enumerate` |
+| Blockquote | `> quoted` | `quote` environment |
+| Theorem etc. | `::: theorem Title` ... `:::` | `theorem`, `lemma`, `definition`, `corollary`, ... |
+| Callout | `::: warning` ... `:::` | boxed note (`note`, `tip`, `warning`, `important`, ...) |
+| Horizontal rule | `---` on its own line | thin rule |
+| Page break | `\newpage` on its own line | `\newpage` |
+| Comment | `<!-- hidden -->` | removed |
+| Hard line break | end a line with `\\` or two spaces | `\\` |
+| Escapes | `\$ \* \_ \# \@ \~ \[ \]` | literal characters |
 | Raw LaTeX | ` ```latex ` ... ` ``` ` | pasted verbatim |
-| Table | GitHub-style `\|...\|` + caption line | `tabular` + `table` |
+| Table | GitHub-style `\|...\|` with `:--:` alignment + caption line | `booktabs` table |
+
+Inline markup and math work **everywhere**: titles, headings, captions, and table cells.
+Dollar amounts (`$4,500 and $300`), email addresses, and `@` in prose are left alone.
+Smart quotes and common Unicode (`→ ✓ ± ≤ α …`) are converted to proper LaTeX automatically.
 
 ### Front matter (YAML)
 
@@ -61,11 +75,47 @@ markus build paper.mks
 ---
 title: "Paper title"
 author: "Name"           # or list of names / {name, affiliation, email}
+date: June 12, 2026      # optional, defaults to today
 abstract: |
   Multi-line abstract.
-template: article        # LaTeX template (bundled: article)
-bib: refs.bib            # bibliography file for natbib
+keywords: latex, markdown
+template: article        # see `markus templates`
+bib: refs.bib            # bibliography file
 ---
+```
+
+Tip: in YAML double-quoted strings a backslash is an escape character — use single
+quotes for LaTeX in titles: `title: 'A $O(n \log n)$ Study'`.
+
+### Templates
+
+`markus templates` lists all of them:
+
+- **article**, **twocolumn**, **notes** (no title page; tables/figures stay inline)
+- **report** (`#` headings become chapters), **assignment** (course/due-date header), **cv**
+- **letter** — front matter `to:`, `from:`, `date:`, `subject:`; single newlines are kept as line breaks
+- **beamer** — `##` headings start new slides
+- venue styles: **ieee**, **ieee-journal**, **ieee-trans**, **acm**, **acm-acmlarge**, **springer**, **nature**, **revtex**, **apa**
+
+**Letter example**
+
+```markdown
+---
+template: letter
+date: June 12, 2026
+to: |
+  The Registrar
+  Stanford University
+from: Vishesh Yadav
+subject: Fee waiver request
+---
+
+Dear Sir/Madam,
+
+I am writing to request a waiver of the $250 late fee.
+
+Sincerely,
+Vishesh
 ```
 
 ## CLI
@@ -73,22 +123,31 @@ bib: refs.bib            # bibliography file for natbib
 ```bash
 markus init [name]          # create starter .mks + refs.bib
 markus build paper.mks      # .mks → .tex → .pdf
+markus build paper.mks -w   # rebuild on every save (watch mode)
 markus build paper.mks --tex-only
+markus check paper.mks      # lint: unknown refs/citations, missing figures, bad glyphs
+markus clean paper.mks      # remove LaTeX build artifacts
 markus compile-tex paper.tex
 ```
+
+`markus build` warns about unknown citation keys, references to missing labels,
+missing figure files and characters pdflatex cannot typeset — with `.mks` line numbers.
+LaTeX failures report the actual error instead of a half-built PDF; auxiliary files
+go to a `.markus-aux/` directory.
 
 ## Project layout
 
 ```
-src/markus/          # compiler (parser, LaTeX emitter, CLI)
+src/markus/            # compiler (parser, LaTeX emitter, diagnostics, CLI)
 src/markus/templates/  # LaTeX skeletons
-examples/            # quickstart, formal papers, informal notes (see examples/README.md)
+examples/              # quickstart, formal papers, informal notes (see examples/README.md)
 tests/
 ```
 
-## Editor: `.mks` file icon (Cursor / VS Code)
+## Editor: `.mks` support (Cursor / VS Code)
 
-A small extension in `vscode-markus/` uses `mkc_fi_logo_transparent1.png` as the explorer icon for `.mks` files.
+A small extension in `vscode-markus/` provides syntax highlighting, file icons,
+and a live PDF preview.
 
 Install once (from repo root):
 
@@ -97,26 +156,18 @@ cursor --install-extension ./vscode-markus
 # or: code --install-extension ./vscode-markus
 ```
 
-Then reload the window (`Developer: Reload Window`). The workspace already sets `"workbench.iconTheme": "markus-icons"`.
+Then reload the window (`Developer: Reload Window`).
 
 **Icon themes:** Markus does not replace your normal icons by default. To use the custom `.mks` icon in the explorer:
 
 - **Preferences: File Icon Theme** → **Markus Icons**, or
-- Set `"markus.fileIcons": true` in settings (uses Markus icons for all files + the mks logo)
-
-If you prefer your usual theme (Seti, etc.), leave that off — only `.mks` tabs/commands use the Markus logo.
-
-Regenerate icons after changing the logo:
-
-```bash
-python3 vscode-markus/scripts/build-icons.py
-```
+- Set `"markus.fileIcons": true` in settings
 
 ### Live LaTeX preview
 
-With a `.mks` file open, click the **preview** icon in the editor title bar (next to the split editor button). It opens a PDF panel beside your source and recompiles ~1s after you stop typing.
-
-Requires `markus` CLI (from `pip install -e .`) and `latexmk` (TeX Live / MacTeX).
+With a `.mks` file open, click the **preview** icon in the editor title bar.
+It opens a PDF panel beside your source and recompiles ~1s after you stop typing.
+Compile errors are shown in the panel with the offending line.
 
 Settings:
 

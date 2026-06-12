@@ -14,6 +14,9 @@ class TemplateSpec:
     author_mode: str  # standard | ieee | acm
     default_bibstyle: str
     aliases: tuple[str, ...] = ()
+    floats: bool = True  # False → tables/figures placed inline (notes, letters)
+    chapters: bool = False  # True → level-1 headings become \chapter
+    kind: str = "standard"  # standard | letter | beamer
 
 
 TEMPLATES: dict[str, TemplateSpec] = {}
@@ -32,8 +35,69 @@ _reg(
         description="No title page — just body text (lazy notes, minutes, handouts)",
         columns=1,
         author_mode="standard",
-        default_bibstyle="plainnat",
+        default_bibstyle="plain",
         aliases=("informal", "memo", "minutes"),
+        floats=False,
+    )
+)
+_reg(
+    TemplateSpec(
+        id="letter",
+        label="Letter",
+        description="Formal letter / notice (to, from, date, subject in front matter)",
+        columns=1,
+        author_mode="standard",
+        default_bibstyle="plain",
+        aliases=("notice", "formal-letter"),
+        floats=False,
+        kind="letter",
+    )
+)
+_reg(
+    TemplateSpec(
+        id="report",
+        label="Report",
+        description="Multi-chapter report/thesis (level-1 headings become chapters)",
+        columns=1,
+        author_mode="standard",
+        default_bibstyle="plainnat",
+        aliases=("thesis", "book"),
+        chapters=True,
+    )
+)
+_reg(
+    TemplateSpec(
+        id="assignment",
+        label="Assignment",
+        description="Homework/assignment with course + due date in the page header",
+        columns=1,
+        author_mode="standard",
+        default_bibstyle="plain",
+        aliases=("homework", "problem-set"),
+    )
+)
+_reg(
+    TemplateSpec(
+        id="beamer",
+        label="Slides (Beamer)",
+        description="Presentation slides — '##' headings start new frames",
+        columns=1,
+        author_mode="standard",
+        default_bibstyle="plain",
+        aliases=("slides", "presentation"),
+        kind="beamer",
+    )
+)
+_reg(
+    TemplateSpec(
+        id="cv",
+        label="CV / Résumé",
+        description="Compact curriculum vitae layout",
+        columns=1,
+        author_mode="standard",
+        default_bibstyle="plain",
+        aliases=("resume",),
+        floats=False,
     )
 )
 _reg(

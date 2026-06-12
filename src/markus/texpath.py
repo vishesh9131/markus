@@ -39,8 +39,13 @@ def tex_bin_dirs() -> list[Path]:
 
 def augmented_path_env() -> dict[str, str]:
     env = os.environ.copy()
-    parts = [str(d) for d in tex_bin_dirs() if d.is_dir()]
+    # Respect the user's PATH (their preferred TeX comes first); only append
+    # known TeX locations as fallbacks for GUI apps with a minimal PATH.
+    # MARKUS_TEX_BIN is an explicit override, so it goes first.
+    override = os.environ.get("MARKUS_TEX_BIN")
+    parts = [override] if override else []
     parts.extend(env.get("PATH", "").split(os.pathsep))
+    parts.extend(str(d) for d in tex_bin_dirs() if d.is_dir())
     # dedupe while keeping order
     seen: set[str] = set()
     ordered: list[str] = []

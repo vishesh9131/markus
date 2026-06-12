@@ -10,6 +10,7 @@ from typing import Any
 class Document:
     meta: dict[str, Any]
     blocks: list[Block] = field(default_factory=list)
+    footnotes: dict[str, list[Inline]] = field(default_factory=dict)
 
 
 # --- block nodes ---
@@ -20,17 +21,20 @@ class Heading:
     level: int
     text: str
     label: str | None = None
+    line: int | None = None
 
 
 @dataclass
 class Paragraph:
     inlines: list[Inline]
+    line: int | None = None
 
 
 @dataclass
 class MathBlock:
     latex: str
     label: str | None = None
+    line: int | None = None
 
 
 @dataclass
@@ -39,40 +43,72 @@ class Figure:
     caption: str
     label: str | None = None
     width: str | None = None
+    line: int | None = None
 
 
 @dataclass
 class CodeBlock:
     code: str
     language: str | None = None
+    line: int | None = None
 
 
 @dataclass
 class RawLatex:
     content: str
+    line: int | None = None
+
+
+@dataclass
+class ListItem:
+    inlines: list[Inline]
+    checked: bool | None = None  # None = plain item, True/False = task checkbox
+    children: list[Block] = field(default_factory=list)  # nested lists
 
 
 @dataclass
 class ListBlock:
     ordered: bool
-    items: list[list[Inline]]
+    items: list[ListItem]
+    line: int | None = None
 
 
 @dataclass
 class Table:
-    headers: list[str]
-    rows: list[list[str]]
+    headers: list[list[Inline]]
+    rows: list[list[list[Inline]]]
+    aligns: list[str] = field(default_factory=list)  # 'l' | 'c' | 'r' per column
     caption: str | None = None
     label: str | None = None
+    line: int | None = None
+
+
+@dataclass
+class BlockQuote:
+    blocks: list[Block]
+    line: int | None = None
+
+
+@dataclass
+class HorizontalRule:
+    line: int | None = None
+
+
+@dataclass
+class FootnoteDef:
+    key: str
+    inlines: list[Inline]
+    line: int | None = None
 
 
 @dataclass
 class Environment:
-    """Theorem-like fenced blocks (::: theorem ... :::)"""
+    """Theorem-like / callout fenced blocks (::: theorem ... :::)"""
 
     kind: str
     title: str | None
     blocks: list[Block]
+    line: int | None = None
 
 
 Block = (
@@ -84,6 +120,9 @@ Block = (
     | RawLatex
     | ListBlock
     | Table
+    | BlockQuote
+    | HorizontalRule
+    | FootnoteDef
     | Environment
 )
 
@@ -107,6 +146,11 @@ class Emphasis:
 
 
 @dataclass
+class Strikeout:
+    children: list[Inline]
+
+
+@dataclass
 class Code:
     value: str
 
@@ -122,9 +166,24 @@ class Cite:
 
 
 @dataclass
+class CiteGroup:
+    keys: list[str]
+
+
+@dataclass
 class Ref:
     kind: str  # fig, eq, sec, tbl
     label: str
+
+
+@dataclass
+class FootnoteRef:
+    key: str
+
+
+@dataclass
+class LineBreak:
+    pass
 
 
 @dataclass
@@ -133,4 +192,17 @@ class Link:
     url: str
 
 
-Inline = Text | Strong | Emphasis | Code | MathInline | Cite | Ref | Link
+Inline = (
+    Text
+    | Strong
+    | Emphasis
+    | Strikeout
+    | Code
+    | MathInline
+    | Cite
+    | CiteGroup
+    | Ref
+    | FootnoteRef
+    | LineBreak
+    | Link
+)

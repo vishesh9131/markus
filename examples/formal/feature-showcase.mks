@@ -110,7 +110,7 @@ If $\ell$ is $L$-smooth, then $\lVert \nabla \mathcal{L}(\theta_1) -
 
 Figures use Markdown image syntax with optional attributes:
 
-![Markus logo used as a placeholder figure](../../mkc_fi_logo_transparent1.png){#fig:logo width=0.45\columnwidth}
+![Markus logo used as a placeholder figure](../../assets/branding/mkc_fi_logo_transparent1.png){#fig:logo width=0.45\columnwidth}
 
 @fig:logo shows branding only; in production, authors supply vector PDFs. Tables
 use GitHub-style pipes:
