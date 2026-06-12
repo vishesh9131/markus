@@ -1,0 +1,313 @@
+"use client";
+
+import { markdown } from "@codemirror/lang-markdown";
+import { oneDark } from "@codemirror/theme-one-dark";
+import CodeMirror from "@uiw/react-codemirror";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { DEFAULT_EXAMPLE, EXAMPLES, TEMPLATES } from "../lib/examples";
+
+const DEBOUNCE_MS = 900;
+const STORAGE_KEY = "markus-studio-doc";
+
+export default function Studio() {
+  const [source, setSource] = useState("");
+  const [example, setExample] = useState(DEFAULT_EXAMPLE);
+  const [template, setTemplate] = useState("");
+  const [auto, setAuto] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [tex, setTex] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
+  const [warnings, setWarnings] = useState([]);
+  const [error, setError] = useState(null);
+  const [ms, setMs] = useState(null);
+  const [tab, setTab] = useState("pdf");
+  const [split, setSplit] = useState(50);
+  const [health, setHealth] = useState(null);
+
+  const timer = useRef(null);
+  const inflight = useRef(null);
+  const sourceRef = useRef("");
+  const pdfUrlRef = useRef(null);
+  const dragging = useRef(false);
+
+  // boot: restore doc, check CLI
+  useEffect(() => {
+    const saved = typeof window !== "undefined" && window.localStorage.getItem(STORAGE_KEY);
+    const initial = saved || EXAMPLES[DEFAULT_EXAMPLE];
+    setSource(initial);
+    sourceRef.current = initial;
+    fetch("/api/health")
+      .then((r) => r.json())
+      .then(setHealth)
+      .catch(() => setHealth({ ok: false }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const compile = useCallback(
+    async (templateOverride) => {
+      const body = {
+        source: sourceRef.current,
+        template: templateOverride !== undefined ? templateOverride : template,
+        format: "pdf",
+      };
+      if (!body.source.trim()) return;
+      if (inflight.current) inflight.current.abort();
+      const ctrl = new AbortController();
+      inflight.current = ctrl;
+      setBusy(true);
+      try {
+        const res = await fetch("/api/compile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: ctrl.signal,
+        });
+        const data = await res.json();
+        if (ctrl.signal.aborted) return;
+        setTex(data.tex ?? null);
+        setWarnings(data.warnings ?? []);
+        setError(data.error ?? null);
+        setMs(data.ms ?? null);
+        if (data.pdf) {
+          const bytes = Uint8Array.from(atob(data.pdf), (c) => c.charCodeAt(0));
+          const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+          if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
+          pdfUrlRef.current = url;
+          setPdfUrl(url);
+        }
+      } catch (e) {
+        if (e.name !== "AbortError") setError(String(e.message || e));
+      } finally {
+        if (inflight.current === ctrl) {
+          inflight.current = null;
+          setBusy(false);
+        }
+      }
+    },
+    [template]
+  );
+
+  // initial compile once the source is loaded
+  useEffect(() => {
+    if (source && !pdfUrl && !busy && tex === null) compile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source]);
+
+  const onChange = useCallback(
+    (value) => {
+      setSource(value);
+      sourceRef.current = value;
+      window.localStorage.setItem(STORAGE_KEY, value);
+      if (!auto) return;
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => compile(), DEBOUNCE_MS);
+    },
+    [auto, compile]
+  );
+
+  const loadExample = (name) => {
+    setExample(name);
+    const doc = EXAMPLES[name];
+    setSource(doc);
+    sourceRef.current = doc;
+    window.localStorage.setItem(STORAGE_KEY, doc);
+    compile();
+  };
+
+  const changeTemplate = (t) => {
+    setTemplate(t);
+    compile(t);
+  };
+
+  const download = (kind) => {
+    if (kind === "pdf" && pdfUrl) {
+      const a = document.createElement("a");
+      a.href = pdfUrl;
+      a.download = "document.pdf";
+      a.click();
+    } else if (kind === "tex" && tex) {
+      const url = URL.createObjectURL(new Blob([tex], { type: "text/plain" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "document.tex";
+      a.click();
+      URL.revokeObjectURL(url);
+    } else if (kind === "mks") {
+      const url = URL.createObjectURL(new Blob([sourceRef.current], { type: "text/plain" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "document.mks";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  // split-pane drag
+  useEffect(() => {
+    const move = (e) => {
+      if (!dragging.current) return;
+      const pct = (e.clientX / window.innerWidth) * 100;
+      setSplit(Math.min(80, Math.max(20, pct)));
+    };
+    const up = () => {
+      dragging.current = false;
+      document.body.style.cursor = "";
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    return () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+  }, []);
+
+  const statusDot = busy ? "busy" : error ? "err" : pdfUrl ? "ok" : "";
+  const statusText = busy
+    ? "Compiling…"
+    : error
+      ? "Build failed"
+      : pdfUrl
+        ? `Compiled${ms != null ? ` in ${(ms / 1000).toFixed(1)}s` : ""}`
+        : "Ready";
+
+  return (
+    <div className="app">
+      <div className="topbar">
+        <div className="brand">
+          <span className="name">markus</span>
+          <span className="tag">studio — .mks → LaTeX → PDF</span>
+        </div>
+
+        <select value={example} onChange={(e) => loadExample(e.target.value)} title="Load example">
+          {Object.keys(EXAMPLES).map((k) => (
+            <option key={k} value={k}>
+              {k}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={template}
+          onChange={(e) => changeTemplate(e.target.value)}
+          title="Template override"
+        >
+          {TEMPLATES.map((t) => (
+            <option key={t || "auto"} value={t}>
+              {t || "template: auto"}
+            </option>
+          ))}
+        </select>
+
+        <button className="compile" onClick={() => compile()} disabled={busy}>
+          {busy ? "Compiling…" : "Compile"}
+        </button>
+
+        <label className="toggle">
+          <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
+          auto
+        </label>
+
+        <div className="spacer" />
+
+        <button onClick={() => download("mks")} title="Download .mks source">
+          ⬇ .mks
+        </button>
+        <button onClick={() => download("tex")} disabled={!tex} title="Download generated LaTeX">
+          ⬇ .tex
+        </button>
+        <button onClick={() => download("pdf")} disabled={!pdfUrl} title="Download PDF">
+          ⬇ .pdf
+        </button>
+
+        <div className="status">
+          <span className={`dot ${statusDot}`} />
+          {statusText}
+          {health && !health.ok && <span style={{ color: "var(--red)" }}>· markus CLI not found</span>}
+        </div>
+      </div>
+
+      <div className="main">
+        <div className="pane editor-pane" style={{ flexBasis: `${split}%`, flexGrow: 0, flexShrink: 0 }}>
+          <CodeMirror
+            value={source}
+            height="100%"
+            theme={oneDark}
+            extensions={[markdown()]}
+            onChange={onChange}
+            basicSetup={{ lineNumbers: true, foldGutter: false, highlightActiveLine: true }}
+          />
+        </div>
+
+        <div
+          className={`divider${dragging.current ? " dragging" : ""}`}
+          onMouseDown={() => {
+            dragging.current = true;
+            document.body.style.cursor = "col-resize";
+          }}
+        />
+
+        <div className="pane" style={{ flex: 1 }}>
+          <div className="preview-tabs">
+            <button className={`tab ${tab === "pdf" ? "active" : ""}`} onClick={() => setTab("pdf")}>
+              PDF
+            </button>
+            <button className={`tab ${tab === "tex" ? "active" : ""}`} onClick={() => setTab("tex")}>
+              LaTeX
+            </button>
+            <button
+              className={`tab ${tab === "problems" ? "active" : ""}`}
+              onClick={() => setTab("problems")}
+            >
+              Problems
+              {warnings.length + (error ? 1 : 0) > 0 && (
+                <span className="badge">{warnings.length + (error ? 1 : 0)}</span>
+              )}
+            </button>
+          </div>
+
+          <div className="preview-body">
+            {tab === "pdf" &&
+              (pdfUrl ? (
+                <iframe key={pdfUrl} src={pdfUrl} title="PDF preview" />
+              ) : (
+                <div className="placeholder">
+                  <div style={{ fontSize: 28 }}>📄</div>
+                  <div>The compiled PDF will appear here.</div>
+                  <div style={{ fontSize: 12 }}>
+                    Requires the markus CLI and latexmk (TeX Live / MacTeX) on this machine.
+                  </div>
+                </div>
+              ))}
+
+            {tab === "tex" && (
+              <pre className="tex-view">{tex ?? "Generated LaTeX will appear here."}</pre>
+            )}
+
+            {tab === "problems" && (
+              <div className="problems">
+                {error && <div className="err">✕ {error}</div>}
+                {warnings.map((w, i) => (
+                  <div key={i} className="warn">
+                    ⚠ {w}
+                  </div>
+                ))}
+                {!error && warnings.length === 0 && (
+                  <div className="none">No problems — clean compile.</div>
+                )}
+              </div>
+            )}
+
+            {busy && (
+              <div className="overlay">
+                <div className="spinner" />
+                compiling…
+              </div>
+            )}
+          </div>
+
+          {error && tab !== "problems" && <div className="errorbar">{error.split("\n")[0]}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}

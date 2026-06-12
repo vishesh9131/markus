@@ -25,3 +25,5 @@ vscode-markus/bundled/markus/
 vscode-markus/bundled/deps/
 .vscode-test/
 .aware/
+web/node_modules/
+web/.next/

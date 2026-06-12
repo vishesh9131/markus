@@ -1,0 +1,19 @@
+{
+  "name": "markus-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Overleaf-style live editor for Markus: write .mks, preview LaTeX and PDF",
+  "scripts": {
+    "dev": "next dev -p 4400",
+    "build": "next build",
+    "start": "next start -p 4400"
+  },
+  "dependencies": {
+    "@codemirror/lang-markdown": "^6.3.0",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@uiw/react-codemirror": "^4.23.0",
+    "next": "^15.3.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}

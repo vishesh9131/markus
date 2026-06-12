@@ -12,3 +12,12 @@ markus build paper.mks -t ieee   # IEEE two-column conference
 markus build paper.mks -w        # watch mode: rebuild on save
 markus check paper.mks           # lint refs, citations, figures
 ```
+
+## Markus Studio (web editor)
+
+An Overleaf-style live editor lives in [web/](web/): write `.mks` on the left,
+watch the generated LaTeX and compiled PDF update on the right.
+
+```bash
+cd web && npm install && npm run dev   # http://localhost:4400
+```
