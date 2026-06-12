@@ -197,10 +197,14 @@ def _markus_preamble(spec: TemplateSpec) -> str:
     """Definitions every generated document relies on, injected into all templates."""
     lines = [
         "% --- injected by markus ---",
+        "\\makeatletter",
         "\\usepackage{graphicx}",
-        "\\usepackage{amssymb}",
+        # acmart sets up its own math fonts (newtxmath defines \Bbbk, \square,
+        # ...) late in the preamble, so loading amssymb here would clash
+        *([] if spec.author_mode == "acm" else ["\\@ifundefined{square}{\\usepackage{amssymb}}{}"]),
         "\\usepackage{textcomp}",
         "\\usepackage[normalem]{ulem}",
+        "\\makeatother",
         "\\providecommand{\\markusopenbox}{\\mbox{$\\square$}}",
         "\\providecommand{\\markuscheckedbox}{\\mbox{\\rlap{\\hspace{0.14em}"
         "\\raisebox{0.12ex}{\\scriptsize$\\checkmark$}}$\\square$}}",
@@ -209,10 +213,11 @@ def _markus_preamble(spec: TemplateSpec) -> str:
         "{\\end{quote}\\medskip}",
     ]
     if spec.kind != "beamer":
-        # theorem environments for templates that don't define their own
+        # theorem environments for templates that don't define their own;
+        # amsthm clashes with classes that define \proof (llncs), so guard it
         lines += [
-            "\\usepackage{amsthm}",
             "\\makeatletter",
+            "\\@ifundefined{proof}{\\usepackage{amsthm}}{}",
             "\\@ifundefined{theorem}{\\newtheorem{theorem}{Theorem}}{}",
             "\\@ifundefined{lemma}{\\newtheorem{lemma}[theorem]{Lemma}}{}",
             "\\@ifundefined{definition}{\\newtheorem{definition}[theorem]{Definition}}{}",
@@ -687,15 +692,27 @@ class _Emitter:
 
         return ""
 
+    _TOP_MATH_ENV_RE = re.compile(
+        r"^\\begin\{(equation|align|gather|multline|alignat|flalign|eqnarray|displaymath|math)\*?\}"
+    )
+    # inner building blocks that may contain \\ and & without being multi-equation
+    _INNER_MATH_ENV_RE = re.compile(
+        r"\\begin\{(cases|[pbBvV]?matrix|smallmatrix|array|aligned|split|gathered|alignedat)\*?\}"
+        r".*?\\end\{\1\*?\}",
+        re.DOTALL,
+    )
+
     def math_block(self, block: MathBlock) -> str:
         latex = _math_latex(block.latex)
         ql = _qual_label("eq", block.label)
         label_tex = f"\\label{{{ql}}}\n" if ql else ""
-        if "\\begin{" in latex:
-            # user provided a full environment (align, cases, ...) — pass through
+        if self._TOP_MATH_ENV_RE.match(latex):
+            # user provided a complete display environment — pass through
             return latex
-        if "\\\\" in latex:
-            env = "align" if "&" in latex else "gather"
+        # decide layout from structure outside inner envs like cases/matrix
+        skeleton = self._INNER_MATH_ENV_RE.sub("", latex)
+        if "\\\\" in skeleton:
+            env = "align" if "&" in skeleton else "gather"
             return f"\\begin{{{env}}}\n{label_tex}{latex}\n\\end{{{env}}}"
         return f"\\begin{{equation}}\n{label_tex}{latex}\n\\end{{equation}}"
 

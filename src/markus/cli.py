@@ -113,6 +113,15 @@ def _compile_pdf(
         errors = _extract_log_errors(log_path)
         msg_lines = [f"LaTeX build failed for {tex_path.name}"]
         msg_lines += [f"  ! {e}" for e in errors]
+        if (template or "").startswith("revtex") or any(
+            "collaboration@sw" in e or "@argswap" in e for e in errors
+        ):
+            msg_lines.append(
+                "note: REVTeX 4.2 (2023) is incompatible with the LaTeX kernel in "
+                "TeX Live 2025+. This is an upstream REVTeX bug — use TeX Live "
+                "2024 or an alternative template (e.g. 'article' or 'nature') "
+                "until APS releases a fix."
+            )
         if not errors:
             tail = (result.stdout or "").strip().splitlines()[-12:]
             msg_lines += [f"  {ln}" for ln in tail]

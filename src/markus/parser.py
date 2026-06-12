@@ -501,6 +501,9 @@ def _parse_list(lines: list[str], start: int) -> tuple[ListBlock, int]:
                 child, i = _parse_list(lines, i)
                 pending_children.append(child)
                 continue
+            if m.group(2)[0].isdigit() != ordered:
+                # marker type changed at the same level: a new list starts here
+                break
             flush()
             content = m.group(3)
             task_m = TASK_MARK_RE.match(content)

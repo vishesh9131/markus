@@ -351,3 +351,51 @@ def test_check_unknown_ref_and_cite(tmp_path):
     warnings = check_document(doc, src, f)
     assert any("eq:nope" in w for w in warnings)
     assert any("ghost2020" in w for w in warnings)
+
+
+# --- batch-suite regressions (50-persona integration run) ---
+
+def test_cases_inside_display_math_wrapped_in_equation():
+    src = "$$\nf(x) = \\begin{cases} 1 & x > 0 \\\\ 0 & \\text{else} \\end{cases}\n$$\n"
+    tex = _tex(src)
+    assert "\\begin{equation}" in tex
+    assert "\\begin{align}" not in tex
+
+
+def test_top_level_align_passthrough():
+    src = "$$\n\\begin{align}\na &= b\n\\end{align}\n$$\n"
+    tex = _tex(src)
+    assert tex.count("\\begin{align}") == 1
+    assert "\\begin{equation}" not in tex.split("\\begin{align}")[0].rsplit("\n", 3)[-1]
+
+
+def test_mixed_list_types_split():
+    src = "- bullet one\n- bullet two\n\n1. first\n2. second\n"
+    doc = parse(src)
+    lists = [b for b in doc.blocks if isinstance(b, ListBlock)]
+    assert len(lists) == 2
+    assert lists[0].ordered is False
+    assert lists[1].ordered is True
+
+
+def test_ordered_after_bullet_no_blank_line():
+    src = "- bullet\n1. number\n"
+    doc = parse(src)
+    lists = [b for b in doc.blocks if isinstance(b, ListBlock)]
+    assert len(lists) == 2
+
+
+def test_acm_preamble_skips_amssymb():
+    tex = _tex("Body.\n", template="acm")
+    assert "ifundefined{square}" not in tex
+
+
+def test_article_preamble_guards():
+    tex = _tex("Body.\n", template="article")
+    assert "\\@ifundefined{square}{\\usepackage{amssymb}}{}" in tex
+    assert "\\@ifundefined{proof}{\\usepackage{amsthm}}{}" in tex
+
+
+def test_preamble_before_title_not_after_author():
+    tex = _tex("---\ntitle: T\nauthor: A\ntemplate: revtex\n---\n\nBody.\n", template="revtex")
+    assert tex.index("end markus preamble") < tex.index("\\title{")
