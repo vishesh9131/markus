@@ -1,0 +1,48 @@
+---
+title: "Markus Quickstart"
+author:
+  - name: Ada Markus
+    affiliation: Example University
+abstract: |
+  Smallest useful `.mks` file: sections, math, one citation, a table, and a
+  theorem block. Build with `markus build examples/quickstart/minimal.mks`.
+template: article
+bib: ../assets/refs.bib
+---
+
+# Introduction {#sec:intro}
+
+Markus (`.mks`) is **Markdown-like** input with *LaTeX-quality* output.
+Inline math: $\nabla \cdot \mathbf{E} = \rho / \epsilon_0$.
+
+$$
+\frac{\partial^2 u}{\partial t^2} = c^2 \nabla^2 u
+$$
+{#eq:wave}
+
+See @sec:intro and @eq:wave. Cite [@einstein1905].
+
+# Methods
+
+::: definition Fourier transform
+For $f \in L^1(\mathbb{R})$,
+$\mathcal{F}\{f\}(\xi) = \int_{-\infty}^{\infty} f(x) e^{-2\pi i x \xi}\, dx$.
+:::
+
+| Model | BLEU |
+|-------|------|
+| Baseline | 18.3 |
+| Markus-assisted | 24.1 |
+
+Table: Toy scores
+{#tbl:scores}
+
+@tbl:scores summarizes results.
+
+# Conclusion
+
+```bash
+markus build examples/quickstart/minimal.mks
+```
+
+$e^23$ = i dont know

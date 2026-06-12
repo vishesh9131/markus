@@ -1,0 +1,42 @@
+---
+title: "Markus on IEEE Conference Templates"
+template: ieee
+author:
+  - name: Ada Markus
+    affiliation: Example University
+    email: ada@example.edu
+  - name: Bob Researcher
+    affiliation: Partner Lab
+abstract: |
+  Short IEEE conference sample. Uses bundled IEEEtran via `template: ieee`.
+keywords:
+  - Markus
+  - LaTeX
+  - IEEE
+bib: ../assets/refs.bib
+---
+
+# Introduction {#sec:intro}
+
+Markus supports venue templates: **IEEE**, **ACM**, **two-column article**, Springer LNCS, REVTeX, and APA.
+
+Inline math $E = mc^2$ and:
+
+$$
+\nabla \cdot \mathbf{E} = \frac{\rho}{\epsilon_0}
+$$
+{#eq:gauss}
+
+See @sec:intro and @eq:gauss. [@einstein1905]
+
+# Results
+
+| Method | Score |
+|--------|-------|
+| Baseline | 0.71 |
+| Markus | 0.89 |
+
+Table: Benchmark scores
+{#tbl:scores}
+
+Use @tbl:scores for comparison.

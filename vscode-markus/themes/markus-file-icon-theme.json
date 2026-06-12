@@ -1,0 +1,59 @@
+{
+  "iconDefinitions": {
+    "_file": {
+      "iconPath": "../icons/default-file.svg"
+    },
+    "_folder": {
+      "iconPath": "../icons/default-folder.svg"
+    },
+    "_folder_open": {
+      "iconPath": "../icons/default-folder-open.svg"
+    },
+    "markus-file": {
+      "iconPath": "../icons/mkc-icon.png"
+    },
+    "markus-file-light": {
+      "iconPath": "../icons/mkc-icon-light.png"
+    }
+  },
+  "file": "_file",
+  "folder": "_folder",
+  "folderExpanded": "_folder_open",
+  "rootFolder": "_folder",
+  "rootFolderExpanded": "_folder_open",
+  "fileExtensions": {
+    "mks": "markus-file"
+  },
+  "languageIds": {
+    "markus": "markus-file"
+  },
+  "light": {
+    "iconDefinitions": {
+      "_file": {
+        "iconPath": "../icons/default-file-light.svg"
+      },
+      "_folder": {
+        "iconPath": "../icons/default-folder-light.svg"
+      },
+      "_folder_open": {
+        "iconPath": "../icons/default-folder-open-light.svg"
+      },
+      "markus-file": {
+        "iconPath": "../icons/mkc-icon-light.png"
+      }
+    },
+    "file": "_file",
+    "folder": "_folder",
+    "folderExpanded": "_folder_open",
+    "rootFolder": "_folder",
+    "rootFolderExpanded": "_folder_open",
+    "fileExtensions": {
+      "mks": "markus-file"
+    },
+    "languageIds": {
+      "markus": "markus-file"
+    }
+  },
+  "fileNames": {},
+  "folderNames": {}
+}

@@ -1,0 +1,183 @@
+{
+  "name": "markus-language",
+  "displayName": "Markus",
+  "description": "Markus (.mks) language support, file icons, and live LaTeX PDF preview",
+  "version": "0.4.0",
+  "publisher": "markus",
+  "license": "MIT",
+  "main": "./extension.js",
+  "scripts": {
+    "bundle": "python3 scripts/bundle-compiler.py",
+    "vscode:prepublish": "npm run bundle"
+  },
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Themes"
+  ],
+  "activationEvents": [
+    "onLanguage:markus",
+    "onStartupFinished",
+    "workspaceContains:**/*.mks"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "markus",
+        "aliases": [
+          "Markus",
+          "mks"
+        ],
+        "extensions": [
+          ".mks"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "icons/mkc-icon-light.png",
+          "dark": "icons/mkc-icon.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "markus",
+        "scopeName": "source.markus",
+        "path": "./syntaxes/markus.tmLanguage.json"
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "markus-icons",
+        "label": "Markus Icons",
+        "path": "./themes/markus-file-icon-theme.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "markus.openPreview",
+        "title": "Markus Preview",
+        "icon": {
+          "light": "icons/mkc-icon-light.png",
+          "dark": "icons/mkc-icon.png"
+        }
+      },
+      {
+        "command": "markus.openPreviewFromEditor",
+        "title": "Markus Preview",
+        "icon": {
+          "light": "icons/mkc-icon-light.png",
+          "dark": "icons/mkc-icon.png"
+        }
+      },
+      {
+        "command": "markus.refreshPreview",
+        "title": "Refresh Markus Preview",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "markus.exportPdf",
+        "title": "Markus: Export PDF",
+        "icon": "$(export)"
+      },
+      {
+        "command": "markus.exportPdfFromEditor",
+        "title": "Markus: Export PDF",
+        "icon": "$(export)"
+      },
+      {
+        "command": "markus.exportTex",
+        "title": "Markus: Export LaTeX",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "markus.exportTexFromEditor",
+        "title": "Markus: Export LaTeX",
+        "icon": "$(file-code)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "markus.openPreviewFromEditor",
+          "when": "editorLangId == markus",
+          "group": "navigation@99"
+        },
+        {
+          "command": "markus.exportPdfFromEditor",
+          "when": "editorLangId == markus",
+          "group": "navigation@98"
+        },
+        {
+          "command": "markus.exportTexFromEditor",
+          "when": "editorLangId == markus",
+          "group": "navigation@97"
+        }
+      ],
+      "editor/title/run": [
+        {
+          "command": "markus.openPreviewFromEditor",
+          "when": "editorLangId == markus",
+          "group": "navigation@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "markus.openPreviewFromEditor",
+          "when": "editorLangId == markus",
+          "group": "navigation"
+        },
+        {
+          "command": "markus.exportPdfFromEditor",
+          "when": "editorLangId == markus",
+          "group": "navigation"
+        },
+        {
+          "command": "markus.exportTexFromEditor",
+          "when": "editorLangId == markus",
+          "group": "navigation"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "markus.openPreview",
+        "key": "ctrl+shift+m",
+        "mac": "cmd+shift+m",
+        "when": "editorLangId == markus"
+      }
+    ],
+    "configuration": {
+      "title": "Markus",
+      "properties": {
+        "markus.cliPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional override for the Markus CLI. Leave empty to use the compiler bundled inside this extension."
+        },
+        "markus.preview.debounceMs": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 300,
+          "description": "Delay before recompiling PDF after you stop typing (milliseconds)"
+        },
+        "markus.texBinPath": {
+          "type": "string",
+          "default": "",
+          "description": "Folder containing latexmk (e.g. /Library/TeX/texbin or /opt/homebrew/bin). Auto-detected if empty."
+        },
+        "markus.fileIcons": {
+          "type": "boolean",
+          "default": false,
+          "description": "Set workbench icon theme to Markus Icons (custom .mks icon + generic icons for other files). Leave off to keep your normal icon theme."
+        }
+      }
+    },
+    "configurationDefaults": {
+      "files.associations": {
+        "*.mks": "markus"
+      }
+    }
+  }
+}

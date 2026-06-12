@@ -1,0 +1,234 @@
+---
+title: "Markus: A Markdown-Dialect Compiler for Publication-Ready Manuscripts"
+template: ieee
+author:
+  - name: Elena Rivera
+    affiliation: Department of Computer Science, Northbridge University
+    email: erivera@northbridge.edu
+  - name: James Okonkwo
+    affiliation: Institute for Scientific Computing
+    email: jokonkwo@isc.example.org
+  - name: Priya Nair
+    affiliation: Department of Computer Science, Northbridge University
+    email: pnair@northbridge.edu
+abstract: |
+  Preparing camera-ready academic papers still requires authors to master
+  LaTeX, template packages, and build tooling. We present Markus, a
+  Markdown-like authoring format (.mks) that compiles to LaTeX-quality PDF
+  through a small, extensible pipeline. Markus supports YAML metadata,
+  venue templates (IEEE, ACM, two-column article, and others), numbered
+  math, cross-references, bibliographies, tables, figures, and theorem
+  environments while remaining readable in plain text. We describe the
+  document model, template system, and editor integration with live PDF
+  preview. A case study on three conference drafts shows that Markus
+  reduces source size and iteration time compared to hand-written LaTeX,
+  with output suitable for IEEE two-column proceedings.
+keywords:
+  - scholarly publishing
+  - markup languages
+  - LaTeX
+  - document compilation
+  - IEEE templates
+bib: ../assets/refs.bib
+bibstyle: IEEEtran
+---
+
+# Introduction {#sec:intro}
+
+Academic writing workflows often split **authoring** (in Word or Markdown) from
+**formatting** (in LaTeX). Tools such as [Pandoc](https://pandoc.org/) bridge
+that gap but still require authors to manage templates and math syntax by hand
+[@pandoc2023] [@lamport1994]. *Markus* targets the subset of structure researchers
+use daily: sections, inline code like `markus build`, citations, and labels.
+
+Our contributions are threefold:
+
+1. A readable `.mks` syntax with YAML front matter and Markdown-like body text.
+2. A template registry for common venues, including **IEEE two-column** proceedings.
+3. Editor support with live PDF preview and one-click export to `.tex` and `.pdf`.
+
+As summarized in @sec:intro, the rest of this paper follows the standard
+IMRaD structure. Related work is in @sec:related, the compiler in @sec:method,
+and evaluation in @sec:experiments.
+
+# Related Work {#sec:related}
+
+Document converters map lightweight markup to TeX or PDF. Pandoc remains the
+most general [@pandoc2023]. Markus differs by focusing on *manuscripts only*:
+opinionated defaults, built-in venue templates, and cross-reference syntax
+(`@eq:`, `@fig:`, `@tbl:`, and `@sec:` labels) designed for papers rather than general
+documents [@markus2026].
+
+::: remark Historical note
+LaTeX itself was introduced as a markup layer over TeX to separate content from
+layout [@lamport1994]. Markus applies the same separation one level higher.
+:::
+
+# Method {#sec:method}
+
+## Document model {#sec:model}
+
+Markus parses each source file into an abstract syntax tree (AST): headings,
+paragraphs, lists, tables, figures, math blocks, and fenced environments. YAML
+front matter supplies metadata consumed by templates.
+
+::: definition Markus document
+A **Markus document** is a pair $(M, B)$ where $M$ is metadata (title, authors,
+template, bibliography) and $B$ is an ordered list of content blocks.
+:::
+
+::: theorem Completeness of the model
+Every valid `.mks` file maps to exactly one LaTeX manuscript given a fixed
+template identifier and bibliography path.
+:::
+
+::: proof Sketch
+Parsing is deterministic line-by-line with explicit fence delimiters; emission
+is a pure function from AST to text with no hidden global state.
+:::
+
+## Mathematics {#sec:math}
+
+Inline math uses `$...$`, for example the softmax $\mathrm{softmax}(z_i) =
+e^{z_i} / \sum_j e^{z_j}$. Display equations receive labels:
+
+$$
+\mathcal{L}(\theta) = \sum_{(x,y) \in \mathcal{D}} \ell\bigl(f_\theta(x), y\bigr)
++ \lambda \lVert \theta \rVert_2^2
+$$
+{#eq:loss}
+
+The loss in @eq:loss generalizes standard empirical risk. Einstein's mass-energy
+relation $E = mc^2$ appears inline for classic citations [@einstein1905].
+
+::: lemma Gradient bound
+If $\ell$ is $L$-smooth, then $\lVert \nabla \mathcal{L}(\theta_1) -
+\nabla \mathcal{L}(\theta_2) \rVert \leq L \lVert \theta_1 - \theta_2 \rVert$.
+:::
+
+## Figures and tables {#sec:floats}
+
+Figures use Markdown image syntax with optional attributes:
+
+![Markus logo used as a placeholder figure](../../mkc_fi_logo_transparent1.png){#fig:logo width=0.45\columnwidth}
+
+@fig:logo shows branding only; in production, authors supply vector PDFs. Tables
+use GitHub-style pipes:
+
+| System | Input | Templates | Live preview |
+|--------|-------|-----------|--------------|
+| LaTeX | `.tex` | Manual | External |
+| Pandoc | `.md` | External | No |
+| Markus | `.mks` | Built-in | Yes |
+
+Table: Comparison of scholarly authoring stacks
+{#tbl:compare}
+
+From @tbl:compare, Markus is the only row with bundled templates and preview.
+Scores on a toy translation task:
+
+| Model | BLEU | Latency (s) |
+|-------|------|-------------|
+| Baseline | 18.3 | 2.1 |
+| + Markup assist | 21.7 | 2.4 |
+| Markus pipeline | 24.1 | 2.6 |
+
+Table: Machine translation micro-benchmark (dev set)
+{#tbl:scores}
+
+Improvements in @tbl:scores align with faster draft iteration reported by users.
+
+## Environments and code {#sec:code}
+
+Markus supports fenced **theorem-like** blocks and syntax-highlighted code
+(where the template allows):
+
+::: example Usage
+From the project root, install and build:
+
+```bash
+pip install -e .
+markus templates
+markus build examples/formal/feature-showcase.mks -t ieee
+```
+
+The same document compiles with another template:
+
+```bash
+markus build examples/formal/feature-showcase.mks -t twocolumn
+```
+:::
+
+A short Python-like pseudocode fragment:
+
+```python
+def compile_mks(path: str, template: str = "article") -> str:
+    doc = parse(path.read_text())
+    return emit(doc, template=template)
+```
+
+Raw LaTeX passes through when fenced with the `latex` language tag:
+
+```latex
+\newcommand{\markus}{\textsc{Markus}}
+\thanks{Supported by the Northbridge Research Fund.}
+```
+
+## Attention baseline {#sec:attention}
+
+For neural baselines we cite the transformer architecture [@vaswani2017]. The
+scaled dot-product attention is
+
+$$
+\mathrm{Attention}(Q,K,V) = \mathrm{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right) V
+$$
+{#eq:attention}
+
+Equation @eq:attention is included to demonstrate multi-line display math and
+Cross-reference syntax in prose (see @eq:loss and @sec:math).
+
+# Experiments {#sec:experiments}
+
+## Setup {#sec:setup}
+
+We asked twelve graduate students to rewrite one-page related-work sections in
+plain LaTeX, Pandoc, and Markus. Metrics:
+
+- Words per minute during drafting.
+- Lines of source for equivalent PDF layout.
+- Build success rate on first `latexmk` invocation.
+
+::: example Participant task
+Each participant received the same outline (@sec:intro) and bibliography
+(@tbl:compare). They submitted PDF plus source.
+:::
+
+## Results {#sec:results}
+
+Participants reported lower friction with Markus lists and citations. Two
+ordered steps they followed:
+
+1. Author in `.mks` with `template: ieee`.
+2. Export PDF from the editor preview or `markus build`.
+
+Unordered drawbacks mentioned:
+
+- Learning `@eq:` / `@fig:` conventions.
+- Installing MacTeX for local preview.
+- Optional venue classes (ACM `acmart`, Springer `llncs`, etc.) still require a full TeX distribution.
+
+Overall, Markus reduced mean source lines by 22% versus hand-written LaTeX for
+the same IEEE PDF (see @tbl:scores and @sec:floats).
+
+# Conclusion {#sec:conclusion}
+
+We presented Markus, a `.mks` format and compiler for scholarly manuscripts with
+IEEE and other venue templates, rich cross-references, and live preview. Future
+work includes HTML export, collaborative editing, and automatic template
+detection from conference URLs. The system is open source [@markus2026]; try
+the sample in `examples/formal/feature-showcase.mks` and the `\markus` macro defined above.
+
+# Acknowledgment
+
+The authors thank the Markus early users for feedback on preview latency and
+template coverage.

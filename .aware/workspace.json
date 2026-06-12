@@ -1,0 +1,22 @@
+{
+  "awareWorkspaceVersion": 1,
+  "savedAt": 1779455802927,
+  "project": {
+    "name": "Hello World",
+    "description": "",
+    "createdAt": 1779455729293,
+    "updatedAt": 1779455802927
+  },
+  "canvasMode": "logical",
+  "nodes": [],
+  "edges": [],
+  "captainSessions": [
+    {
+      "id": "6d20bcd3-19cb-43f9-ab1d-19d0696aeb8c",
+      "name": "Session 1",
+      "messages": [],
+      "buildToolsAllowed": true
+    }
+  ],
+  "activeCaptainSessionId": "6d20bcd3-19cb-43f9-ab1d-19d0696aeb8c"
+}

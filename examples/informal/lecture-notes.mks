@@ -1,0 +1,25 @@
+# cs482 lec 12 — max flow
+
+mar 4. kt ch 7. typos happen sorry
+
+max flow / min cut today
+
+flow = respect capacities + conservation at internal nodes  
+cut = partition with s in S, t in T, capacity = sum edges S→T
+
+ford-fulkerson: start zero, push on augmenting paths in residual until stuck
+
+$|f|$ = net out of source (same as net into sink)
+
+little table from board:
+
+| edge | cap | flow |
+|------|-----|------|
+| s→a | 10 | 7 |
+| a→t | 10 | 7 |
+| s→b | 5 | 3 |
+| b→t | 5 | 3 |
+
+hw: 7.3, 7.8. optional edmonds-karp
+
+oh tue 2-3 cs301, thu 10-11 zoom

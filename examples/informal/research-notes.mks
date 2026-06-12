@@ -1,0 +1,18 @@
+# layout loss idea (messy)
+
+page breaks suck. what if we penalize whitespace variance across pages and backprop float placement? probably dumb but weekend project
+
+papers to skim:
+- attention thing
+- markus ast (small, maybe hook json export)
+- einstein pdf on desk (ignore)
+
+$$
+\sum_p (w_p - \bar w)^2
+$$
+
+try: ast→json page count heuristic, article vs twocolumn same file, count latexmk warnings
+
+dont mix up markup layer vs layout layer
+
+ask james if ieee preview still broken. figure for showcase later. read stuff before friday

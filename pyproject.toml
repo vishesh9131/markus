@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "markus"
+version = "0.1.0"
+description = "Write papers in Markdown-like .mks files, compile to LaTeX-quality PDFs"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Markus contributors" }]
+keywords = ["latex", "markdown", "academic", "publishing"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Text Processing :: Markup",
+]
+dependencies = [
+    "click>=8.1",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+markus = "markus.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/markus"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src/markus" = "markus"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

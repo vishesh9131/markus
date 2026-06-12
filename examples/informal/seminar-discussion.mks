@@ -1,0 +1,27 @@
+# seminar — attention paper
+
+one line: self-attention instead of rnn recurrence
+
+questions:
+- why divide by sqrt(d_k)
+- param count vs our gpu
+- would .mks notes help replication
+
+$$
+\mathrm{softmax}(QK^\top/\sqrt{d_k})V
+$$
+
+| | recurrence | parallel | long range |
+|---|------------|----------|------------|
+| rnn | yes | bad | meh |
+| cnn | local | ok | meh |
+| transformer | no | great | good |
+
+positional encoding — fixed vs learned  
+multi-head — why  
+training $$$ on hardware slide
+
+after:
+- [ ] zotero
+- [ ] steal slide for deck
+- [ ] find efficient attention followup

@@ -1,0 +1,128 @@
+# Markus
+
+Write academic manuscripts in a **Markdown-like** syntax (`.mks`), compile to **LaTeX-quality PDF**.
+
+```bash
+pip install -e .
+markus init my-paper
+markus build my-paper.mks
+```
+
+Requires [TeX Live](https://www.tug.org/texlive/) or [MacTeX](https://www.tug.org/mactex/) with `latexmk` on your `PATH`.
+
+## Quick example
+
+**`paper.mks`**
+
+```markdown
+---
+title: "My Paper"
+author:
+  - name: Jane Doe
+    affiliation: MIT
+template: article
+bib: refs.bib
+---
+
+# Introduction {#sec:intro}
+
+Inline math $E=mc^2$ and [@smith2020]. See @sec:intro.
+
+$$
+\int_0^1 x^2\,dx = \frac{1}{3}
+$$
+{#eq:integral}
+```
+
+```bash
+markus build paper.mks
+# → paper.tex, paper.pdf
+```
+
+## Syntax reference
+
+| Feature | Markus | LaTeX output |
+|---------|--------|--------------|
+| Section | `# Title {#sec:id}` | `\section` + `\label{sec:id}` |
+| Bold / italic | `**b**` / `*i*` | `\textbf` / `\textit` |
+| Inline math | `$...$` | `$...$` |
+| Display math | `$$...$$` then `{#eq:id}` | `equation` + `\label{eq:id}` |
+| Citation | `[@key]` | `\cite{key}` |
+| Reference | `@fig:id`, `@eq:id`, `@sec:id`, `@tbl:id` | `\ref{...}` |
+| Figure | `![cap](path){#fig:id width=0.8\textwidth}` | `figure` + `\includegraphics` |
+| Theorem | `::: theorem Title` ... `:::` | `\begin{theorem}` |
+| Proof | `::: proof` ... `:::` | `\begin{proof}` |
+| Raw LaTeX | ` ```latex ` ... ` ``` ` | pasted verbatim |
+| Table | GitHub-style `\|...\|` + caption line | `tabular` + `table` |
+
+### Front matter (YAML)
+
+```yaml
+---
+title: "Paper title"
+author: "Name"           # or list of names / {name, affiliation, email}
+abstract: |
+  Multi-line abstract.
+template: article        # LaTeX template (bundled: article)
+bib: refs.bib            # bibliography file for natbib
+---
+```
+
+## CLI
+
+```bash
+markus init [name]          # create starter .mks + refs.bib
+markus build paper.mks      # .mks → .tex → .pdf
+markus build paper.mks --tex-only
+markus compile-tex paper.tex
+```
+
+## Project layout
+
+```
+src/markus/          # compiler (parser, LaTeX emitter, CLI)
+src/markus/templates/  # LaTeX skeletons
+examples/            # quickstart, formal papers, informal notes (see examples/README.md)
+tests/
+```
+
+## Editor: `.mks` file icon (Cursor / VS Code)
+
+A small extension in `vscode-markus/` uses `mkc_fi_logo_transparent1.png` as the explorer icon for `.mks` files.
+
+Install once (from repo root):
+
+```bash
+cursor --install-extension ./vscode-markus
+# or: code --install-extension ./vscode-markus
+```
+
+Then reload the window (`Developer: Reload Window`). The workspace already sets `"workbench.iconTheme": "markus-icons"`.
+
+**Icon themes:** Markus does not replace your normal icons by default. To use the custom `.mks` icon in the explorer:
+
+- **Preferences: File Icon Theme** → **Markus Icons**, or
+- Set `"markus.fileIcons": true` in settings (uses Markus icons for all files + the mks logo)
+
+If you prefer your usual theme (Seti, etc.), leave that off — only `.mks` tabs/commands use the Markus logo.
+
+Regenerate icons after changing the logo:
+
+```bash
+python3 vscode-markus/scripts/build-icons.py
+```
+
+### Live LaTeX preview
+
+With a `.mks` file open, click the **preview** icon in the editor title bar (next to the split editor button). It opens a PDF panel beside your source and recompiles ~1s after you stop typing.
+
+Requires `markus` CLI (from `pip install -e .`) and `latexmk` (TeX Live / MacTeX).
+
+Settings:
+
+- `markus.cliPath` — custom path to `markus` binary
+- `markus.preview.debounceMs` — recompile delay (default `1000`)
+
+## License
+
+MIT

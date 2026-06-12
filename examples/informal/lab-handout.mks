@@ -1,0 +1,28 @@
+# lab 4 — gradient descent (maybe publish later idk)
+
+pairs ok, one laptop. dont sudo pip.
+
+## do this
+
+venv + numpy + matplotlib. minimize $(\theta-3)^2$, gradient is $2(\theta-3)$.
+
+```python
+theta = 0.0
+eta = 0.1
+for _ in range(50):
+    theta -= eta * 2 * (theta - 3)
+```
+
+turn in plot + final theta. what if eta = 1.2? write two sentences.
+
+## points
+
+| thing | pts |
+|-------|-----|
+| runs | 4 |
+| plot | 3 |
+| blurb | 3 |
+
+eta too big = oscillates. try 0.05 / 0.1 / 0.2
+
+forum tag `lab4` if stuck
