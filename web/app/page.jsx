@@ -342,7 +342,7 @@ export default function Studio() {
               </div>
             )}
 
-            {busy && (
+            {busy && pdfData && (
               <div className="overlay">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img className="loader-gif" src="/mks-loader.gif" alt="compiling" />
