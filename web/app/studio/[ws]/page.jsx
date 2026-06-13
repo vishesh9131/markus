@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { use, useCallback, useEffect, useState } from "react";
 import Studio from "../../../components/Studio";
+import Loader from "../../../components/Loader";
 import { runUpgrade } from "../../../lib/upgrade";
 
 const STARTER = `---
@@ -23,6 +24,7 @@ export default function WorkspaceEditor({ params }) {
   const { ws: wsId } = use(params);
   const [state, setState] = useState({ status: "loading" });
   const [active, setActive] = useState(null); // {id, name, content}
+  const [opening, setOpening] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/workspaces").then((r) => r.json());
@@ -39,9 +41,14 @@ export default function WorkspaceEditor({ params }) {
   }, [load]);
 
   const openDoc = async (docId) => {
-    const res = await fetch(`/api/workspaces/${wsId}/docs/${docId}`).then((r) => r.json());
-    if (!res.ok) return alert(res.error);
-    setActive({ id: res.doc.id, name: res.doc.name, content: res.doc.content });
+    setOpening(true);
+    try {
+      const res = await fetch(`/api/workspaces/${wsId}/docs/${docId}`).then((r) => r.json());
+      if (!res.ok) return alert(res.error);
+      setActive({ id: res.doc.id, name: res.doc.name, content: res.doc.content });
+    } finally {
+      setOpening(false);
+    }
   };
 
   const newDoc = async () => {
@@ -79,7 +86,7 @@ export default function WorkspaceEditor({ params }) {
     try { await runUpgrade(state.user); await load(); } catch (e) { if (e.message !== "cancelled") alert(e.message); }
   }, [state, load]);
 
-  if (state.status === "loading") return <div className="dash"><div className="dash-empty">Loading…</div></div>;
+  if (state.status === "loading") return <div className="dash"><Loader label="Opening workspace…" /></div>;
   if (state.status === "error") return <div className="dash"><div className="dash-empty">{state.error} · <Link href="/studio">back</Link></div></div>;
 
   const { ws, account } = state;
@@ -139,6 +146,7 @@ export default function WorkspaceEditor({ params }) {
           </div>
         )}
       </main>
+      {opening && <Loader overlay label="Opening document…" />}
     </div>
   );
 }

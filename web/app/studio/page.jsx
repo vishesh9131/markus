@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { SignOutButton } from "../../components/AuthButtons";
+import Loader from "../../components/Loader";
 import { runUpgrade } from "../../lib/upgrade";
 
 export default function Dashboard() {
@@ -75,7 +76,7 @@ export default function Dashboard() {
   };
 
   if (error) return <div className="dash"><div className="dash-empty">{error}</div></div>;
-  if (!data) return <div className="dash"><div className="dash-empty">Loading…</div></div>;
+  if (!data) return <div className="dash"><Loader label="Loading your workspaces…" /></div>;
 
   const { user, account, limits, workspaces, backend } = data;
   const free = account.tier !== "premium";
@@ -83,6 +84,7 @@ export default function Dashboard() {
 
   return (
     <div className="dash">
+      {(busy || creating) && <Loader overlay label={creating ? "Creating workspace…" : "One moment…"} />}
       <header className="dash-nav">
         <Link className="brand" href="/">
           <span className="name">Markus</span>
