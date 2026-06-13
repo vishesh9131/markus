@@ -20,7 +20,7 @@ function b64ToBytes(b64) {
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 4;
 
-export default function PdfViewer({ data, fileName = "document.pdf" }) {
+export default function PdfViewer({ data, fileName = "document.pdf", onPages }) {
   const scrollRef = useRef(null);
   const hostRef = useRef(null);
   const canvasesRef = useRef([]);
@@ -72,6 +72,7 @@ export default function PdfViewer({ data, fileName = "document.pdf" }) {
         }
         setDoc(pdf);
         setPages(pdf.numPages);
+        onPages?.(pdf.numPages);
         setCurrent(1);
       })
       .catch(() => {});

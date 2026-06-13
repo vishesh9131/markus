@@ -27,3 +27,8 @@ vscode-markus/bundled/deps/
 .aware/
 web/node_modules/
 web/.next/
+
+# web env + local data
+web/.env*
+!web/.env.example
+web/.data/

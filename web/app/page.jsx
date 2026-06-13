@@ -1,412 +1,122 @@
-"use client";
+import Link from "next/link";
+import { auth, AUTH_MODE } from "../auth";
+import { PREMIUM, FREE_LIMITS } from "../lib/quota";
+import { SignInButton } from "../components/AuthButtons";
 
-import { markdown } from "@codemirror/lang-markdown";
-import CodeMirror, { EditorView } from "@uiw/react-codemirror";
-import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { DEFAULT_EXAMPLE, EXAMPLES, TEMPLATES } from "../lib/examples";
-
-// PDF.js touches the DOM/worker — load it client-side only.
-const PdfViewer = dynamic(() => import("../components/PdfViewer"), { ssr: false });
-
-const DEBOUNCE_MS = 350;
-const STORAGE_KEY = "markus-studio-doc";
-
-// Manus-toned light editor theme (warm paper, near-black ink)
-const markusEditorTheme = EditorView.theme(
-  {
-    "&": { backgroundColor: "#ffffff", color: "#1a1916" },
-    ".cm-content": { caretColor: "#1a1916" },
-    ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#1a1916" },
-    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
-      { backgroundColor: "#e7e4db" },
-    ".cm-gutters": {
-      backgroundColor: "#faf9f5",
-      color: "#bcb8ad",
-      border: "none",
-    },
-    ".cm-activeLine": { backgroundColor: "#faf9f5" },
-    ".cm-activeLineGutter": { backgroundColor: "#f1efe8", color: "#8a8780" },
-    ".cm-lineNumbers .cm-gutterElement": { padding: "0 10px 0 12px" },
-  },
-  { dark: false }
-);
-
-// Dark editor theme (matches the dark surface palette)
-const markusEditorThemeDark = EditorView.theme(
-  {
-    "&": { backgroundColor: "#1b1f25", color: "#dfe4ea" },
-    ".cm-content": { caretColor: "#dfe4ea" },
-    ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#dfe4ea" },
-    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
-      { backgroundColor: "#2f3742" },
-    ".cm-gutters": { backgroundColor: "#21262e", color: "#5a626d", border: "none" },
-    ".cm-activeLine": { backgroundColor: "#21262e" },
-    ".cm-activeLineGutter": { backgroundColor: "#272d36", color: "#8a93a0" },
-    ".cm-lineNumbers .cm-gutterElement": { padding: "0 10px 0 12px" },
-  },
-  { dark: true }
-);
-
-export default function Studio() {
-  const [source, setSource] = useState("");
-  const [example, setExample] = useState(DEFAULT_EXAMPLE);
-  const [template, setTemplate] = useState("");
-  const [auto, setAuto] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [tex, setTex] = useState(null);
-  const [pdfUrl, setPdfUrl] = useState(null);
-  const [pdfData, setPdfData] = useState(null);
-  const [warnings, setWarnings] = useState([]);
-  const [error, setError] = useState(null);
-  const [ms, setMs] = useState(null);
-  const [tab, setTab] = useState("pdf");
-  const [split, setSplit] = useState(50);
-  const [health, setHealth] = useState(null);
-  const [theme, setTheme] = useState("light");
-
-  const timer = useRef(null);
-  const inflight = useRef(null);
-  const sourceRef = useRef("");
-  const pdfUrlRef = useRef(null);
-  const dragging = useRef(false);
-  const sessionRef = useRef(null);
-
-  // boot: restore doc, session id, check CLI
-  useEffect(() => {
-    const saved = typeof window !== "undefined" && window.localStorage.getItem(STORAGE_KEY);
-    const initial = saved || EXAMPLES[DEFAULT_EXAMPLE];
-    setSource(initial);
-    sourceRef.current = initial;
-    let sid = window.localStorage.getItem("markus-studio-session");
-    if (!sid) {
-      sid = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
-      window.localStorage.setItem("markus-studio-session", sid);
-    }
-    sessionRef.current = sid;
-    setTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
-    fetch("/api/health")
-      .then((r) => r.json())
-      .then(setHealth)
-      .catch(() => setHealth({ ok: false }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const toggleTheme = useCallback(() => {
-    setTheme((prev) => {
-      const next = prev === "dark" ? "light" : "dark";
-      document.documentElement.dataset.theme = next;
-      window.localStorage.setItem("markus-studio-theme", next);
-      return next;
-    });
-  }, []);
-
-  // cream loader on dark surfaces, ink on light
-  const loaderSrc = theme === "dark" ? "/mks-loader-cream.gif" : "/mks-loader.gif";
-
-  const compile = useCallback(
-    async (opts = {}) => {
-      const body = {
-        source: sourceRef.current,
-        template: opts.template !== undefined ? opts.template : template,
-        format: "pdf",
-        sessionId: sessionRef.current,
-        // single fast pdflatex pass while typing; full latexmk on demand
-        fast: opts.fast !== false,
-        reset: opts.reset === true,
-      };
-      if (!body.source.trim()) return;
-      if (inflight.current) inflight.current.abort();
-      const ctrl = new AbortController();
-      inflight.current = ctrl;
-      setBusy(true);
-      try {
-        const res = await fetch("/api/compile", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-          signal: ctrl.signal,
-        });
-        const data = await res.json();
-        if (ctrl.signal.aborted) return;
-        setTex(data.tex ?? null);
-        setWarnings(data.warnings ?? []);
-        setError(data.error ?? null);
-        setMs(data.ms ?? null);
-        if (data.pdf) {
-          setPdfData(data.pdf);
-          const bytes = Uint8Array.from(atob(data.pdf), (c) => c.charCodeAt(0));
-          const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-          if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
-          pdfUrlRef.current = url;
-          setPdfUrl(url);
-        }
-      } catch (e) {
-        if (e.name !== "AbortError") setError(String(e.message || e));
-      } finally {
-        if (inflight.current === ctrl) {
-          inflight.current = null;
-          setBusy(false);
-        }
-      }
-    },
-    [template]
-  );
-
-  // initial compile once the source is loaded (cold build seeds the warm cache)
-  useEffect(() => {
-    if (source && !pdfUrl && !busy && tex === null) compile({ fast: true, reset: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source]);
-
-  const onChange = useCallback(
-    (value) => {
-      setSource(value);
-      sourceRef.current = value;
-      window.localStorage.setItem(STORAGE_KEY, value);
-      if (!auto) return;
-      clearTimeout(timer.current);
-      timer.current = setTimeout(() => compile({ fast: true }), DEBOUNCE_MS);
-    },
-    [auto, compile]
-  );
-
-  const loadExample = (name) => {
-    setExample(name);
-    const doc = EXAMPLES[name];
-    setSource(doc);
-    sourceRef.current = doc;
-    window.localStorage.setItem(STORAGE_KEY, doc);
-    compile({ fast: true, reset: true });
-  };
-
-  const changeTemplate = (t) => {
-    setTemplate(t);
-    compile({ template: t, fast: true, reset: true });
-  };
-
-  const download = (kind) => {
-    if (kind === "pdf" && pdfUrl) {
-      const a = document.createElement("a");
-      a.href = pdfUrl;
-      a.download = "document.pdf";
-      a.click();
-    } else if (kind === "tex" && tex) {
-      const url = URL.createObjectURL(new Blob([tex], { type: "text/plain" }));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "document.tex";
-      a.click();
-      URL.revokeObjectURL(url);
-    } else if (kind === "mks") {
-      const url = URL.createObjectURL(new Blob([sourceRef.current], { type: "text/plain" }));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "document.mks";
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-  };
-
-  // split-pane drag
-  useEffect(() => {
-    const move = (e) => {
-      if (!dragging.current) return;
-      const pct = (e.clientX / window.innerWidth) * 100;
-      setSplit(Math.min(80, Math.max(20, pct)));
-    };
-    const up = () => {
-      dragging.current = false;
-      document.body.style.cursor = "";
-    };
-    window.addEventListener("mousemove", move);
-    window.addEventListener("mouseup", up);
-    return () => {
-      window.removeEventListener("mousemove", move);
-      window.removeEventListener("mouseup", up);
-    };
-  }, []);
-
-  const statusDot = busy ? "busy" : error ? "err" : pdfUrl ? "ok" : "";
-  const statusText = busy
-    ? "Compiling…"
-    : error
-      ? "Build failed"
-      : pdfUrl
-        ? `Compiled${ms != null ? ` in ${(ms / 1000).toFixed(1)}s` : ""}`
-        : "Ready";
+export default async function Landing() {
+  const session = await auth();
+  const signedIn = Boolean(session?.user);
 
   return (
-    <div className="app">
-      <div className="topbar">
+    <div className="landing">
+      <header className="lp-nav">
         <div className="brand">
           <span className="name">Markus</span>
           <span className="tag">studio</span>
         </div>
-
-        <select value={example} onChange={(e) => loadExample(e.target.value)} title="Load example">
-          {Object.keys(EXAMPLES).map((k) => (
-            <option key={k} value={k}>
-              {k}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={template}
-          onChange={(e) => changeTemplate(e.target.value)}
-          title="Template override"
-        >
-          {TEMPLATES.map((t) => (
-            <option key={t || "auto"} value={t}>
-              {t || "template: auto"}
-            </option>
-          ))}
-        </select>
-
-        <button className="compile" onClick={() => compile({ fast: false, reset: true })} disabled={busy} title="Full build (resolves all references)">
-          {busy ? "Compiling…" : "Compile"}
-        </button>
-
-        <label className="toggle">
-          <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
-          auto
-        </label>
-
-        <div className="spacer" />
-
-        <button className="ghost" onClick={() => download("mks")} title="Download .mks source">
-          .mks
-        </button>
-        <button className="ghost" onClick={() => download("tex")} disabled={!tex} title="Download generated LaTeX">
-          .tex
-        </button>
-        <button className="ghost" onClick={() => download("pdf")} disabled={!pdfUrl} title="Download PDF">
-          .pdf
-        </button>
-
-        <div className="status">
-          {busy ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img className="status-mks" src={loaderSrc} alt="" />
+        <nav className="lp-links">
+          <a href="#features">Features</a>
+          <a href="#pricing">Pricing</a>
+          {signedIn ? (
+            <Link className="cta sm" href="/studio">Open Studio</Link>
           ) : (
-            <span className={`dot ${statusDot}`} />
+            <SignInButton mode={AUTH_MODE} className="cta sm">
+              Sign in
+            </SignInButton>
           )}
-          {statusText}
-          {health && !health.ok && <span style={{ color: "var(--red)" }}>· markus CLI not found</span>}
-        </div>
+        </nav>
+      </header>
 
-        <button
-          className="icon-btn"
-          onClick={toggleTheme}
-          title={theme === "dark" ? "Switch to light" : "Switch to dark"}
-          aria-label="Toggle theme"
-        >
-          {theme === "dark" ? (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="4.2" stroke="currentColor" strokeWidth="1.6" />
-              <path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5 5l1.7 1.7M17.3 17.3 19 19M19 5l-1.7 1.7M6.7 17.3 5 19"
-                stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-            </svg>
+      <section className="lp-hero">
+        <p className="eyebrow">Write in Markdown. Publish in LaTeX.</p>
+        <h1>
+          A calmer way to write
+          <br />
+          <em>research, notes &amp; letters.</em>
+        </h1>
+        <p className="lp-sub">
+          Markus turns a simple <code>.mks</code> file into LaTeX-quality PDFs — papers, theses,
+          slides, CVs and more. Edit on the left, watch the PDF on the right. Everything you make is
+          saved to <strong>your own Google Drive</strong>.
+        </p>
+        <div className="lp-actions">
+          {signedIn ? (
+            <Link className="cta" href="/studio">Open Studio →</Link>
           ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M20 14.5A8 8 0 1 1 9.5 4a6.3 6.3 0 0 0 10.5 10.5z"
-                stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-            </svg>
+            <SignInButton mode={AUTH_MODE} className="cta" />
           )}
-        </button>
-      </div>
+          <a className="ghost-btn" href="#pricing">See pricing</a>
+        </div>
+        <p className="lp-fine">
+          {AUTH_MODE === "google"
+            ? "Sign in with Google — we only touch files this app creates in your Drive."
+            : "Demo mode (no Google keys set): sign in instantly, workspaces save locally."}
+        </p>
+      </section>
 
-      <div className="main">
-        <div className="pane editor-pane" style={{ flexBasis: `${split}%`, flexGrow: 0, flexShrink: 0 }}>
-          <div className="pane-head">source · .mks</div>
-          <div className="editor-wrap">
-            <CodeMirror
-              value={source}
-              height="100%"
-              theme={theme === "dark" ? "dark" : "light"}
-              extensions={[
-                markdown(),
-                theme === "dark" ? markusEditorThemeDark : markusEditorTheme,
-                EditorView.lineWrapping,
-              ]}
-              onChange={onChange}
-              basicSetup={{ lineNumbers: true, foldGutter: false, highlightActiveLine: true }}
-            />
+      <section id="features" className="lp-features">
+        {[
+          ["Markdown-simple", "Headings, math, citations, tables, theorems, footnotes — plain text that reads like notes, compiles like LaTeX."],
+          ["Live PDF preview", "A real PDF.js viewer with selectable text, zoom, and page nav. Recompiles ~0.5s after you stop typing."],
+          ["Your Drive, your files", "Each workspace is a folder in your Google Drive. Your work is yours — nothing locked in our servers."],
+          ["12+ templates", "IEEE, ACM, Springer, APA, beamer slides, letters, CV, reports — switch with one dropdown."],
+          ["Light & dark", "A refined, distraction-free workspace that follows your system theme."],
+          ["Export anywhere", "Download the .mks source, the generated .tex, or the compiled .pdf at any time."],
+        ].map(([title, body]) => (
+          <div className="feature" key={title}>
+            <h3>{title}</h3>
+            <p>{body}</p>
+          </div>
+        ))}
+      </section>
+
+      <section id="pricing" className="lp-pricing">
+        <h2>Simple pricing</h2>
+        <div className="plans">
+          <div className="plan">
+            <div className="plan-name">Free</div>
+            <div className="plan-price">₹0</div>
+            <ul>
+              <li>{FREE_LIMITS.workspaces} workspaces</li>
+              <li>{FREE_LIMITS.docsPerWorkspace} documents per workspace</li>
+              <li>Up to {FREE_LIMITS.pagesPerDoc} pages per document</li>
+              <li>Saved to your Google Drive</li>
+              <li>All templates &amp; live preview</li>
+            </ul>
+            {signedIn ? (
+              <Link className="ghost-btn wide" href="/studio">Open Studio</Link>
+            ) : (
+              <SignInButton mode={AUTH_MODE} className="ghost-btn wide">Get started</SignInButton>
+            )}
+          </div>
+
+          <div className="plan featured">
+            <div className="ribbon">Best value</div>
+            <div className="plan-name">Premium</div>
+            <div className="plan-price">
+              ₹{PREMIUM.rupees}
+              <span className="per"> / {PREMIUM.months} months</span>
+            </div>
+            <ul>
+              <li><strong>Unlimited</strong> workspaces</li>
+              <li><strong>Unlimited</strong> documents</li>
+              <li><strong>Unlimited</strong> pages</li>
+              <li>Everything in Free</li>
+              <li>Support the project ♥</li>
+            </ul>
+            {signedIn ? (
+              <Link className="cta wide" href="/studio?upgrade=1">Go Premium</Link>
+            ) : (
+              <SignInButton mode={AUTH_MODE} className="cta wide">Go Premium</SignInButton>
+            )}
           </div>
         </div>
+      </section>
 
-        <div
-          className={`divider${dragging.current ? " dragging" : ""}`}
-          onMouseDown={() => {
-            dragging.current = true;
-            document.body.style.cursor = "col-resize";
-          }}
-        />
-
-        <div className="pane" style={{ flex: 1 }}>
-          <div className="preview-tabs">
-            <button className={`tab ${tab === "pdf" ? "active" : ""}`} onClick={() => setTab("pdf")}>
-              PDF
-            </button>
-            <button className={`tab ${tab === "tex" ? "active" : ""}`} onClick={() => setTab("tex")}>
-              LaTeX
-            </button>
-            <button
-              className={`tab ${tab === "problems" ? "active" : ""}`}
-              onClick={() => setTab("problems")}
-            >
-              Problems
-              {warnings.length + (error ? 1 : 0) > 0 && (
-                <span className="badge">{warnings.length + (error ? 1 : 0)}</span>
-              )}
-            </button>
-          </div>
-
-          <div className="preview-body">
-            {tab === "pdf" &&
-              (pdfData ? (
-                <PdfViewer data={pdfData} fileName="document.pdf" />
-              ) : (
-                <div className="placeholder">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img className="ph-loader" src={loaderSrc} alt="markus" />
-                  <div>The compiled PDF will appear here.</div>
-                  <div className="ph-sub">
-                    Requires the markus CLI and latexmk (TeX Live / MacTeX) on this machine.
-                  </div>
-                </div>
-              ))}
-
-            {tab === "tex" && (
-              <pre className="tex-view">{tex ?? "Generated LaTeX will appear here."}</pre>
-            )}
-
-            {tab === "problems" && (
-              <div className="problems">
-                {error && <div className="err">✕ {error}</div>}
-                {warnings.map((w, i) => (
-                  <div key={i} className="warn">
-                    ⚠ {w}
-                  </div>
-                ))}
-                {!error && warnings.length === 0 && (
-                  <div className="none">No problems — clean compile.</div>
-                )}
-              </div>
-            )}
-
-            {busy && pdfData && (
-              <div className="overlay">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img className="loader-gif" src={loaderSrc} alt="compiling" />
-              </div>
-            )}
-          </div>
-
-          {error && tab !== "problems" && <div className="errorbar">{error.split("\n")[0]}</div>}
-        </div>
-      </div>
+      <footer className="lp-footer">
+        <span>Markus — write less markup, get more done.</span>
+        <a href="https://github.com/vishesh9131/markus" target="_blank" rel="noreferrer">GitHub</a>
+      </footer>
     </div>
   );
 }
