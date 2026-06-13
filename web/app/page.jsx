@@ -2,8 +2,12 @@
 
 import { markdown } from "@codemirror/lang-markdown";
 import CodeMirror, { EditorView } from "@uiw/react-codemirror";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_EXAMPLE, EXAMPLES, TEMPLATES } from "../lib/examples";
+
+// PDF.js touches the DOM/worker — load it client-side only.
+const PdfViewer = dynamic(() => import("../components/PdfViewer"), { ssr: false });
 
 const DEBOUNCE_MS = 900;
 const STORAGE_KEY = "markus-studio-doc";
@@ -36,6 +40,7 @@ export default function Studio() {
   const [busy, setBusy] = useState(false);
   const [tex, setTex] = useState(null);
   const [pdfUrl, setPdfUrl] = useState(null);
+  const [pdfData, setPdfData] = useState(null);
   const [warnings, setWarnings] = useState([]);
   const [error, setError] = useState(null);
   const [ms, setMs] = useState(null);
@@ -88,6 +93,7 @@ export default function Studio() {
         setError(data.error ?? null);
         setMs(data.ms ?? null);
         if (data.pdf) {
+          setPdfData(data.pdf);
           const bytes = Uint8Array.from(atob(data.pdf), (c) => c.charCodeAt(0));
           const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
           if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
@@ -289,8 +295,8 @@ export default function Studio() {
 
           <div className="preview-body">
             {tab === "pdf" &&
-              (pdfUrl ? (
-                <iframe key={pdfUrl} src={pdfUrl} title="PDF preview" />
+              (pdfData ? (
+                <PdfViewer data={pdfData} />
               ) : (
                 <div className="placeholder">
                   <div className="ph-mark">M</div>

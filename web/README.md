@@ -6,7 +6,9 @@ Markus Studio previews **`.mks` (Markdown-like) → LaTeX → PDF**, side by sid
 ![layout](#) Editor on the left (CodeMirror, markdown highlighting), live preview
 on the right with three tabs:
 
-- **PDF** — the compiled document (auto-recompiles ~1s after you stop typing)
+- **PDF** — the compiled document rendered with a custom PDF.js canvas viewer
+  (no browser chrome; clean pages on the paper background, with a minimal zoom
+  control). Auto-recompiles ~1s after you stop typing.
 - **LaTeX** — the generated `.tex`, so you can see exactly what Markus emits
 - **Problems** — `markus check` diagnostics with `.mks` line numbers, plus LaTeX errors
 
