@@ -638,7 +638,20 @@ html[data-theme="dark"] .topbar select {
 .lp-links a { color: var(--ink-soft); text-decoration: none; font-size: 14px; }
 .lp-links a:hover { color: var(--ink); }
 
-.lp-hero { padding: 9vh 7vw 7vh; max-width: 880px; }
+.lp-hero {
+  padding: 7vh 7vw 6vh;
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  align-items: center;
+  gap: 30px;
+}
+.lp-hero-text { max-width: 620px; }
+.lp-hero-art { height: 460px; width: 100%; }
+.hero-canvas { width: 100%; height: 100%; }
+@media (max-width: 860px) {
+  .lp-hero { grid-template-columns: 1fr; }
+  .lp-hero-art { height: 300px; order: -1; }
+}
 .eyebrow {
   text-transform: uppercase; letter-spacing: 0.14em; font-size: 12px;
   color: var(--ink-faint); margin: 0 0 18px;
@@ -780,4 +793,80 @@ html[data-theme="dark"] .topbar select {
 .btn-busy {
   opacity: 0.7;
   cursor: default;
+}
+
+/* ===================== Markus dialog (replaces native alert/confirm/prompt) ===================== */
+.mk-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--overlay-bg);
+  backdrop-filter: blur(3px);
+  padding: 20px;
+  animation: mk-fade 0.12s ease;
+}
+.mk-dialog {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 22px 22px 18px;
+  animation: mk-pop 0.14s ease;
+}
+.mk-dialog-brand .name {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--ink-faint);
+  letter-spacing: -0.01em;
+}
+.mk-dialog-title {
+  font-family: var(--serif);
+  font-size: 19px;
+  margin: 8px 0 6px;
+  color: var(--ink);
+}
+.mk-dialog-msg {
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.mk-dialog-input {
+  width: 100%;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 14px;
+  font-family: var(--sans);
+}
+.mk-dialog-input:focus {
+  outline: none;
+  border-color: var(--ink-soft);
+}
+.mk-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+.cta.danger {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+@keyframes mk-fade {
+  from { opacity: 0; }
+}
+@keyframes mk-pop {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
 }

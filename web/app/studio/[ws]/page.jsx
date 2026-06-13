@@ -4,6 +4,7 @@ import Link from "next/link";
 import { use, useCallback, useEffect, useState } from "react";
 import Studio from "../../../components/Studio";
 import Loader from "../../../components/Loader";
+import { useDialog } from "../../../components/Dialog";
 import { runUpgrade } from "../../../lib/upgrade";
 
 const STARTER = `---
@@ -22,6 +23,7 @@ Start writing here. Inline math like $E = mc^2$, **bold**, and lists:
 
 export default function WorkspaceEditor({ params }) {
   const { ws: wsId } = use(params);
+  const dialog = useDialog();
   const [state, setState] = useState({ status: "loading" });
   const [active, setActive] = useState(null); // {id, name, content}
   const [opening, setOpening] = useState(false);
@@ -44,7 +46,7 @@ export default function WorkspaceEditor({ params }) {
     setOpening(true);
     try {
       const res = await fetch(`/api/workspaces/${wsId}/docs/${docId}`).then((r) => r.json());
-      if (!res.ok) return alert(res.error);
+      if (!res.ok) return dialog.alert(res.error, { title: "Couldn’t open document" });
       setActive({ id: res.doc.id, name: res.doc.name, content: res.doc.content });
     } finally {
       setOpening(false);
@@ -54,12 +56,18 @@ export default function WorkspaceEditor({ params }) {
   const newDoc = async () => {
     const { ws, account, limits } = state;
     if (account.tier !== "premium" && ws.docs.length >= limits.docsPerWorkspace) {
-      if (confirm(`Free plan allows ${limits.docsPerWorkspace} documents per workspace.\n\nUpgrade for unlimited?`)) {
-        try { await runUpgrade(state.user); await load(); } catch (e) { if (e.message !== "cancelled") alert(e.message); }
+      const go = await dialog.confirm(
+        `Free plan allows ${limits.docsPerWorkspace} documents per workspace.\n\nUpgrade for unlimited?`,
+        { title: "Document limit reached", okText: "Upgrade" }
+      );
+      if (go) {
+        try { await runUpgrade(state.user, { confirm: dialog.confirm }); await load(); }
+        catch (e) { if (e.message !== "cancelled") dialog.alert(e.message, { title: "Upgrade" }); }
       }
       return;
     }
-    const name = (window.prompt("Document name", "untitled.mks") || "").trim();
+    const raw = await dialog.prompt("Document name", { title: "New document", defaultValue: "untitled.mks" });
+    const name = (raw || "").trim();
     if (!name) return;
     const docName = name.endsWith(".mks") ? name : `${name}.mks`;
     setActive({ id: null, name: docName, content: STARTER });
@@ -83,8 +91,9 @@ export default function WorkspaceEditor({ params }) {
   );
 
   const upgrade = useCallback(async () => {
-    try { await runUpgrade(state.user); await load(); } catch (e) { if (e.message !== "cancelled") alert(e.message); }
-  }, [state, load]);
+    try { await runUpgrade(state.user, { confirm: dialog.confirm }); await load(); }
+    catch (e) { if (e.message !== "cancelled") dialog.alert(e.message, { title: "Upgrade" }); }
+  }, [state, load, dialog]);
 
   if (state.status === "loading") return <div className="dash"><Loader label="Opening workspace…" /></div>;
   if (state.status === "error") return <div className="dash"><div className="dash-empty">{state.error} · <Link href="/studio">back</Link></div></div>;

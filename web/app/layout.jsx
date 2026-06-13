@@ -1,4 +1,5 @@
 import { DM_Sans, Libre_Baskerville } from "next/font/google";
+import { DialogProvider } from "../components/Dialog";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -33,7 +34,9 @@ export default function RootLayout({ children }) {
           }}
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <DialogProvider>{children}</DialogProvider>
+      </body>
     </html>
   );
 }

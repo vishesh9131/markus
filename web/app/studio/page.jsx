@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { SignOutButton } from "../../components/AuthButtons";
 import Loader from "../../components/Loader";
+import { useDialog } from "../../components/Dialog";
 import { runUpgrade, redeemPromo } from "../../lib/upgrade";
 
 export default function Dashboard() {
   const router = useRouter();
+  const dialog = useDialog();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -30,29 +32,34 @@ export default function Dashboard() {
   const upgrade = useCallback(async () => {
     try {
       setBusy(true);
-      await runUpgrade(data?.user);
+      await runUpgrade(data?.user, { confirm: dialog.confirm });
       await load();
     } catch (e) {
-      if (e.message !== "cancelled") alert(e.message);
+      if (e.message !== "cancelled") dialog.alert(e.message, { title: "Upgrade" });
     } finally {
       setBusy(false);
     }
-  }, [data, load]);
+  }, [data, load, dialog]);
 
   const redeem = useCallback(async () => {
-    const code = window.prompt("Enter your promo code");
+    const code = await dialog.prompt("Enter your promo code", {
+      title: "Redeem code",
+      placeholder: "promo code",
+    });
     if (!code) return;
     try {
       setBusy(true);
       await redeemPromo(code.trim());
       await load();
-      alert("Promo applied — you're Premium! 🎉");
+      dialog.alert("You're Premium now — enjoy unlimited workspaces, documents and pages.", {
+        title: "Promo applied 🎉",
+      });
     } catch (e) {
-      alert(e.message);
+      dialog.alert(e.message, { title: "Redeem code" });
     } finally {
       setBusy(false);
     }
-  }, [load]);
+  }, [load, dialog]);
 
   // auto-open upgrade if redirected with ?upgrade=1
   useEffect(() => {
@@ -67,7 +74,10 @@ export default function Dashboard() {
   }, [data]);
 
   const createWorkspace = async () => {
-    const name = window.prompt("Name your workspace", "My workspace");
+    const name = await dialog.prompt("Name your workspace", {
+      title: "New workspace",
+      defaultValue: "My workspace",
+    });
     if (!name) return;
     setCreating(true);
     const res = await fetch("/api/workspaces", {
@@ -77,15 +87,26 @@ export default function Dashboard() {
     }).then((r) => r.json());
     setCreating(false);
     if (!res.ok) {
-      if (res.code === "WORKSPACE_LIMIT" && confirm(res.error + "\n\nUpgrade now?")) upgrade();
-      else alert(res.error);
+      if (res.code === "WORKSPACE_LIMIT") {
+        const go = await dialog.confirm(`${res.error}\n\nUpgrade now?`, {
+          title: "Free limit reached",
+          okText: "Upgrade",
+        });
+        if (go) upgrade();
+      } else {
+        dialog.alert(res.error, { title: "Couldn’t create workspace" });
+      }
       return;
     }
     router.push(`/studio/${res.workspace.id}`);
   };
 
   const remove = async (id, name) => {
-    if (!confirm(`Delete workspace “${name}” and its documents? This cannot be undone.`)) return;
+    const ok = await dialog.confirm(
+      `Delete “${name}” and all its documents? This can’t be undone.`,
+      { title: "Delete workspace", okText: "Delete", danger: true }
+    );
+    if (!ok) return;
     await fetch(`/api/workspaces/${id}`, { method: "DELETE" });
     load();
   };

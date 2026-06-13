@@ -29,15 +29,19 @@ export async function redeemPromo(code) {
   return res.account;
 }
 
-export async function runUpgrade(user) {
+export async function runUpgrade(user, opts = {}) {
+  const confirm =
+    opts.confirm || ((m) => Promise.resolve(window.confirm(m)));
   const orderRes = await postJson("/api/billing/order");
   if (!orderRes.ok) throw new Error(orderRes.error || "Could not start checkout");
 
   // stub mode (no Razorpay keys): confirm + grant directly
   if (orderRes.stub) {
-    if (!window.confirm(`Demo checkout: upgrade to Premium for ₹${(orderRes.amount / 100).toFixed(0)} / ${orderRes.months} months?\n(No real charge — Razorpay keys not configured.)`)) {
-      throw new Error("cancelled");
-    }
+    const ok = await confirm(
+      `Demo checkout: upgrade to Premium for ₹${(orderRes.amount / 100).toFixed(0)} / ${orderRes.months} months?\n(No real charge — Razorpay keys not configured.)`,
+      { title: "Upgrade", okText: "Upgrade" }
+    );
+    if (!ok) throw new Error("cancelled");
     const v = await postJson("/api/billing/verify", { stub: true });
     if (!v.ok) throw new Error(v.error || "Upgrade failed");
     return v.account;

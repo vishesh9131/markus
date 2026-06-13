@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth, AUTH_MODE } from "../auth";
 import { PREMIUM, FREE_LIMITS } from "../lib/quota";
 import { SignInButton } from "../components/AuthButtons";
+import HeroCanvas from "../components/HeroCanvas";
 
 export default async function Landing() {
   const session = await auth();
@@ -28,30 +29,35 @@ export default async function Landing() {
       </header>
 
       <section className="lp-hero">
-        <p className="eyebrow">Write in Markdown. Publish in LaTeX.</p>
-        <h1>
-          A calmer way to write
-          <br />
-          <em>research, notes &amp; letters.</em>
-        </h1>
-        <p className="lp-sub">
-          Markus turns a simple <code>.mks</code> file into LaTeX-quality PDFs — papers, theses,
-          slides, CVs and more. Edit on the left, watch the PDF on the right. Everything you make is
-          saved to <strong>your own Google Drive</strong>.
-        </p>
-        <div className="lp-actions">
-          {signedIn ? (
-            <Link className="cta" href="/studio">Open Studio →</Link>
-          ) : (
-            <SignInButton mode={AUTH_MODE} className="cta" />
-          )}
-          <a className="ghost-btn" href="#pricing">See pricing</a>
+        <div className="lp-hero-text">
+          <p className="eyebrow">Write in Markdown. Publish in LaTeX.</p>
+          <h1>
+            A calmer way to write
+            <br />
+            <em>research, notes &amp; letters.</em>
+          </h1>
+          <p className="lp-sub">
+            Markus turns a simple <code>.mks</code> file into LaTeX-quality PDFs — papers, theses,
+            slides, CVs and more. Edit on the left, watch the PDF on the right. Everything you make is
+            saved to <strong>your own Google Drive</strong>.
+          </p>
+          <div className="lp-actions">
+            {signedIn ? (
+              <Link className="cta" href="/studio">Open Studio →</Link>
+            ) : (
+              <SignInButton mode={AUTH_MODE} className="cta" />
+            )}
+            <a className="ghost-btn" href="#pricing">See pricing</a>
+          </div>
+          <p className="lp-fine">
+            {AUTH_MODE === "google"
+              ? "Sign in with Google — we only touch files this app creates in your Drive."
+              : "Demo mode (no Google keys set): sign in instantly, workspaces save locally."}
+          </p>
         </div>
-        <p className="lp-fine">
-          {AUTH_MODE === "google"
-            ? "Sign in with Google — we only touch files this app creates in your Drive."
-            : "Demo mode (no Google keys set): sign in instantly, workspaces save locally."}
-        </p>
+        <div className="lp-hero-art">
+          <HeroCanvas />
+        </div>
       </section>
 
       <section id="features" className="lp-features">
