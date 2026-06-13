@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as pdfjs from "pdfjs-dist";
+import "pdfjs-dist/web/pdf_viewer.css";
 
 // Worker is emitted as a static asset by the bundler.
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -90,7 +91,7 @@ export default function PdfViewer({ data, fileName = "document.pdf" }) {
     (async () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const pad = 56;
-      const canvases = [];
+      const wraps = [];
       for (let n = 1; n <= doc.numPages; n++) {
         if (cancelled) return;
         const page = await doc.getPage(n);
@@ -109,22 +110,53 @@ export default function PdfViewer({ data, fileName = "document.pdf" }) {
           lastScaleRef.current = scale;
           setPct(Math.round(scale * 100));
         }
-        const vp = page.getViewport({ scale: scale * dpr, rotation });
+
+        const cssVp = page.getViewport({ scale, rotation });
+        const renderVp = page.getViewport({ scale: scale * dpr, rotation });
+        const cssW = Math.floor(cssVp.width);
+        const cssH = Math.floor(cssVp.height);
+
+        const wrap = document.createElement("div");
+        wrap.className = "pdf-page-wrap";
+        wrap.style.width = `${cssW}px`;
+        wrap.style.height = `${cssH}px`;
+        wrap.style.setProperty("--scale-factor", String(scale));
+        wrap.style.setProperty("--total-scale-factor", String(scale));
+
         const canvas = document.createElement("canvas");
         canvas.className = "pdf-page";
-        canvas.width = Math.floor(vp.width);
-        canvas.height = Math.floor(vp.height);
-        canvas.style.width = `${vp.width / dpr}px`;
-        canvas.style.height = `${vp.height / dpr}px`;
-        canvases.push(canvas);
+        canvas.width = Math.floor(renderVp.width);
+        canvas.height = Math.floor(renderVp.height);
+        canvas.style.width = `${cssW}px`;
+        canvas.style.height = `${cssH}px`;
+        wrap.appendChild(canvas);
+
         const ctx = canvas.getContext("2d");
-        const task = page.render({ canvasContext: ctx, viewport: vp });
+        const task = page.render({ canvasContext: ctx, viewport: renderVp });
         tasks.push(task);
         await task.promise.catch(() => {});
+        if (cancelled) return;
+
+        // selectable / copyable text overlay
+        const tl = document.createElement("div");
+        tl.className = "textLayer";
+        wrap.appendChild(tl);
+        try {
+          const textLayer = new pdfjs.TextLayer({
+            textContentSource: page.streamTextContent(),
+            container: tl,
+            viewport: cssVp,
+          });
+          await textLayer.render();
+        } catch {
+          /* text layer is best-effort; canvas still shows the page */
+        }
+
+        wraps.push(wrap);
       }
       if (cancelled) return;
-      host.replaceChildren(...canvases);
-      canvasesRef.current = canvases;
+      host.replaceChildren(...wraps);
+      canvasesRef.current = wraps;
     })();
 
     return () => {

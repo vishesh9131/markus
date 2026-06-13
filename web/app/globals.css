@@ -417,11 +417,25 @@ body {
   padding: 22px 0 32px;
 }
 
-.pdf-host .pdf-page {
-  display: block;
+.pdf-host .pdf-page-wrap {
+  position: relative;
   background: #fff;
   border-radius: 2px;
   box-shadow: 0 1px 3px rgba(26, 25, 22, 0.16), 0 10px 30px rgba(26, 25, 22, 0.1);
+}
+
+.pdf-host .pdf-page {
+  display: block;
+}
+
+/* selectable text overlay */
+.pdf-host .textLayer {
+  position: absolute;
+  inset: 0;
+}
+
+.pdf-host .textLayer ::selection {
+  background: rgba(79, 124, 240, 0.32);
 }
 
 .preview-body .tex-view {
