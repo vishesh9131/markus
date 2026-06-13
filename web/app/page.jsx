@@ -2,7 +2,7 @@ import Link from "next/link";
 import { auth, AUTH_MODE } from "../auth";
 import { PREMIUM, FREE_LIMITS } from "../lib/quota";
 import { SignInButton } from "../components/AuthButtons";
-import HeroCanvas from "../components/HeroCanvas";
+import HeroDemo from "../components/HeroDemo";
 import ThemeToggle from "../components/ThemeToggle";
 
 export default async function Landing() {
@@ -58,7 +58,7 @@ export default async function Landing() {
           </p>
         </div>
         <div className="lp-hero-art">
-          <HeroCanvas />
+          <HeroDemo />
         </div>
       </section>
 

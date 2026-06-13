@@ -18,7 +18,6 @@
     "pdfjs-dist": "^4.10.38",
     "razorpay": "^2.9.5",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "three": "^0.171.0"
+    "react-dom": "^19.0.0"
   }
 }
