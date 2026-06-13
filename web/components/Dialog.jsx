@@ -37,6 +37,9 @@ export function DialogProvider({ children }) {
       open("confirm", { message, okText: "OK", cancelText: "Cancel", ...opts }),
     prompt: (message, opts = {}) =>
       open("prompt", { message, okText: "OK", cancelText: "Cancel", ...opts }),
+    // choose: opts.options = [{ label, value }]; resolves the chosen value or null
+    choose: (message, opts = {}) =>
+      open("choose", { message, options: [], cancelText: "Cancel", ...opts }),
   }).current;
 
   // focus input / button when a dialog opens
@@ -87,20 +90,38 @@ export function DialogProvider({ children }) {
                 }}
               />
             )}
-            <div className="mk-dialog-actions">
-              {dlg.kind !== "alert" && (
+            {dlg.kind === "choose" ? (
+              <div className="mk-dialog-actions">
                 <button className="ghost-btn" onClick={cancel}>
                   {dlg.cancelText}
                 </button>
-              )}
-              <button
-                ref={dlg.kind === "alert" ? inputRef : null}
-                className={dlg.danger ? "cta danger" : "cta"}
-                onClick={submit}
-              >
-                {dlg.okText}
-              </button>
-            </div>
+                {dlg.options.map((o, i) => (
+                  <button
+                    key={o.value}
+                    ref={i === 0 ? inputRef : null}
+                    className={o.primary ? "cta" : "ghost-btn"}
+                    onClick={() => close(o.value)}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="mk-dialog-actions">
+                {dlg.kind !== "alert" && (
+                  <button className="ghost-btn" onClick={cancel}>
+                    {dlg.cancelText}
+                  </button>
+                )}
+                <button
+                  ref={dlg.kind === "alert" ? inputRef : null}
+                  className={dlg.danger ? "cta danger" : "cta"}
+                  onClick={submit}
+                >
+                  {dlg.okText}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

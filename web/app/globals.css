@@ -1038,3 +1038,7 @@ html[data-theme="dark"] .paper-sheet {
   /* dashboard: one card per row so nothing spills off-screen */
   .ws-grid { grid-template-columns: 1fr; }
 }
+
+/* dark-mode PDF rendering (viewer only; export handled separately) */
+.pdf-root.inverted .pdf-scroll { background: #0e1115; }
+.pdf-root.inverted .pdf-host .pdf-page { filter: invert(0.92) hue-rotate(180deg); }

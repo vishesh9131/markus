@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as pdfjs from "pdfjs-dist";
 import "pdfjs-dist/web/pdf_viewer.css";
+import { useDialog } from "./Dialog";
+import { exportPdfWithPreference } from "../lib/pdfExport";
 
 // Worker is emitted as a static asset by the bundler.
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -35,6 +37,16 @@ export default function PdfViewer({ data, fileName = "document.pdf", onPages }) 
   const [mode, setMode] = useState("width"); // 'width' | 'page' | 'custom'
   const [customScale, setCustomScale] = useState(1);
   const [pct, setPct] = useState(100);
+  const [invert, setInvert] = useState(false); // dark page rendering
+  const dialog = useDialog();
+
+  // default the page appearance to the app theme; follow theme toggles
+  useEffect(() => {
+    const apply = () => setInvert(document.documentElement.dataset.theme === "dark");
+    apply();
+    window.addEventListener("markus-theme", apply);
+    return () => window.removeEventListener("markus-theme", apply);
+  }, []);
 
   // a blob URL for download / print
   useEffect(() => {
@@ -201,12 +213,12 @@ export default function PdfViewer({ data, fileName = "document.pdf", onPages }) 
   }, []);
 
   const download = useCallback(() => {
-    if (!blobUrlRef.current) return;
-    const a = document.createElement("a");
-    a.href = blobUrlRef.current;
-    a.download = fileName;
-    a.click();
-  }, [fileName]);
+    if (!data) return;
+    // always ask the appearance preference before exporting
+    exportPdfWithPreference(dialog, data, fileName, invert ? "dark" : "light").catch((e) =>
+      dialog.alert(String(e?.message || e), { title: "Export failed" })
+    );
+  }, [data, fileName, invert, dialog]);
 
   const print = useCallback(() => {
     if (!blobUrlRef.current) return;
@@ -225,7 +237,7 @@ export default function PdfViewer({ data, fileName = "document.pdf", onPages }) 
   }, []);
 
   return (
-    <div className="pdf-root">
+    <div className={`pdf-root${invert ? " inverted" : ""}`}>
       <div className="pdf-toolbar">
         <div className="grp">
           <button onClick={() => goToPage(current - 1)} disabled={current <= 1} title="Previous page">
@@ -293,6 +305,16 @@ export default function PdfViewer({ data, fileName = "document.pdf", onPages }) 
                 strokeLinecap="round" fill="none" />
               <path d="M12.8 2.6V6H9.4" stroke="currentColor" strokeWidth="1.3"
                 strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button
+            className={invert ? "on" : ""}
+            onClick={() => setInvert((v) => !v)}
+            title={invert ? "Light page" : "Dark page"}
+          >
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="5.4" stroke="currentColor" strokeWidth="1.3" />
+              <path d="M8 2.6a5.4 5.4 0 0 0 0 10.8z" fill="currentColor" />
             </svg>
           </button>
         </div>

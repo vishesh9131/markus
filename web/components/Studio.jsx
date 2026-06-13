@@ -6,6 +6,8 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_EXAMPLE, EXAMPLES, TEMPLATES } from "../lib/examples";
+import { useDialog } from "./Dialog";
+import { exportPdfWithPreference } from "../lib/pdfExport";
 
 const PdfViewer = dynamic(() => import("./PdfViewer"), { ssr: false });
 
@@ -70,6 +72,7 @@ export default function Studio({
   const [split, setSplit] = useState(50);
   const [health, setHealth] = useState(null);
   const [theme, setTheme] = useState("light");
+  const dialog = useDialog();
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const [dirty, setDirty] = useState(false);
@@ -106,6 +109,7 @@ export default function Studio({
       const next = prev === "dark" ? "light" : "dark";
       document.documentElement.dataset.theme = next;
       window.localStorage.setItem("markus-studio-theme", next);
+      window.dispatchEvent(new CustomEvent("markus-theme", { detail: next }));
       return next;
     });
   }, []);
@@ -221,8 +225,12 @@ export default function Studio({
   };
 
   const download = (kind) => {
-    if (kind === "pdf" && pdfUrl) trigger(pdfUrl, "document.pdf");
-    else if (kind === "tex" && tex) {
+    if (kind === "pdf" && pdfData) {
+      const base = (docName || "document").replace(/\.mks$/, "");
+      exportPdfWithPreference(dialog, pdfData, `${base}.pdf`, theme === "dark" ? "dark" : "light").catch(
+        (e) => dialog.alert(String(e?.message || e), { title: "Export failed" })
+      );
+    } else if (kind === "tex" && tex) {
       const url = URL.createObjectURL(new Blob([tex], { type: "text/plain" }));
       trigger(url, "document.tex");
       URL.revokeObjectURL(url);
@@ -323,7 +331,7 @@ export default function Studio({
 
         <button className="ghost" onClick={() => download("mks")} title="Download .mks source">.mks</button>
         <button className="ghost" onClick={() => download("tex")} disabled={!tex} title="Download generated LaTeX">.tex</button>
-        <button className="ghost" onClick={() => download("pdf")} disabled={!pdfUrl} title="Download PDF">.pdf</button>
+        <button className="ghost" onClick={() => download("pdf")} disabled={!pdfData} title="Download PDF">.pdf</button>
 
         <div className="status">
           {busy ? (

@@ -13,6 +13,7 @@
     "@codemirror/theme-one-dark": "^6.1.2",
     "@uiw/react-codemirror": "^4.23.0",
     "googleapis": "^144.0.0",
+    "jspdf": "^4.2.1",
     "next": "^15.3.0",
     "next-auth": "^5.0.0-beta.25",
     "pdfjs-dist": "^4.10.38",
