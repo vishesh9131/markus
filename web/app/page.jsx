@@ -338,8 +338,8 @@ export default function Studio() {
 
             {busy && (
               <div className="overlay">
-                <div className="spinner" />
-                compiling…
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className="loader-gif" src="/mks-loader.gif" alt="compiling" />
               </div>
             )}
           </div>
