@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import { auth } from "../../../../auth";
 import { PREMIUM } from "../../../../lib/quota";
 
@@ -34,7 +33,7 @@ export async function POST() {
       body: JSON.stringify({
         amount: PREMIUM.amountPaise,
         currency: "INR",
-        receipt: `markus_${crypto.randomUUID()}`,
+        receipt: `mks_${Date.now()}`, // Razorpay caps receipt at 40 chars
         notes: { email: session.user.email, plan: `premium_${PREMIUM.months}m` },
       }),
     });
