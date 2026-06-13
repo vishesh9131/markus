@@ -34,8 +34,11 @@ export default function Dashboard() {
       setBusy(true);
       await runUpgrade(data?.user, { confirm: dialog.confirm });
       await load();
+      dialog.alert("Premium is active — unlimited workspaces, documents and pages. Thank you!", {
+        title: "Payment successful 🎉",
+      });
     } catch (e) {
-      if (e.message !== "cancelled") dialog.alert(e.message, { title: "Upgrade" });
+      if (e.message !== "cancelled") dialog.alert(e.message, { title: "Payment not completed" });
     } finally {
       setBusy(false);
     }
@@ -140,7 +143,7 @@ export default function Dashboard() {
             </button>
           </>
         )}
-        <span className="dash-user" title={user.email}>{user.email}</span>
+        <Link className="dash-user" href="/studio/account" title="Account">{user.email}</Link>
         <SignOutButton />
       </header>
 

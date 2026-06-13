@@ -870,3 +870,32 @@ html[data-theme="dark"] .topbar select {
 @keyframes mk-pop {
   from { opacity: 0; transform: translateY(6px) scale(0.98); }
 }
+
+/* ===================== account page ===================== */
+a.dash-user { text-decoration: none; }
+a.dash-user:hover { color: var(--ink); }
+.acct { max-width: 820px; }
+.acct h1 { font-family: var(--serif); font-size: 30px; margin: 0 0 22px; }
+.acct h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint); margin: 0 0 12px; font-weight: 600; }
+.acct-card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  padding: 20px 22px; box-shadow: var(--shadow); margin-bottom: 18px;
+}
+.acct-profile { display: flex; align-items: center; gap: 16px; }
+.acct-avatar { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; }
+.acct-avatar-fallback {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: var(--accent-contrast);
+  font-family: var(--serif); font-weight: 700; font-size: 22px;
+}
+.acct-name { font-size: 17px; font-weight: 600; }
+.acct-email { color: var(--ink-soft); font-size: 13.5px; }
+.acct-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.acct-big { font-family: var(--serif); font-size: 26px; margin: 0 0 4px; }
+.acct-sub { color: var(--ink-soft); font-size: 13.5px; margin: 0 0 16px; line-height: 1.5; }
+.acct-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.acct-stats { list-style: none; padding: 0; margin: 0; }
+.acct-stats li { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.acct-stats li:last-child { border-bottom: none; }
+.acct-stats span { color: var(--ink-soft); }
+@media (max-width: 640px) { .acct-grid { grid-template-columns: 1fr; } }

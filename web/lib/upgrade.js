@@ -66,6 +66,9 @@ export async function runUpgrade(user, opts = {}) {
       },
       modal: { ondismiss: () => reject(new Error("cancelled")) },
     });
+    rzp.on("payment.failed", (resp) => {
+      reject(new Error(resp?.error?.description || "Payment failed. You were not charged."));
+    });
     rzp.open();
   });
 }
