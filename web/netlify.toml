@@ -1,0 +1,9 @@
+# Netlify build config for the Markus web app (front-end + auth + Drive).
+# The PDF compiler is NOT here — it runs on Render; the browser calls it via
+# NEXT_PUBLIC_COMPILE_URL (set in Netlify env vars).
+[build]
+  base = "web"
+  command = "npm run build"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

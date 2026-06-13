@@ -5,6 +5,15 @@ import path from "node:path";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const CORS = {
+  "Access-Control-Allow-Origin": process.env.COMPILE_ALLOW_ORIGIN || "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+export function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS });
+}
+
 function findMarkus() {
   if (process.env.MARKUS_BIN && existsSync(process.env.MARKUS_BIN)) {
     return process.env.MARKUS_BIN;
@@ -28,5 +37,5 @@ export async function GET() {
       resolve(err ? null : (stdout || "").trim())
     );
   });
-  return Response.json({ ok: Boolean(version), markus: version, bin: markus });
+  return Response.json({ ok: Boolean(version), markus: version, bin: markus }, { headers: CORS });
 }

@@ -11,6 +11,9 @@ const PdfViewer = dynamic(() => import("./PdfViewer"), { ssr: false });
 
 const DEBOUNCE_MS = 350;
 const STORAGE_KEY = "markus-studio-doc";
+// when the compiler runs on a separate host (e.g. Render), point the browser at
+// it directly; empty string = same-origin (single-host / local dev)
+const COMPILE_BASE = process.env.NEXT_PUBLIC_COMPILE_URL || "";
 
 const markusEditorTheme = EditorView.theme(
   {
@@ -94,7 +97,7 @@ export default function Studio({
     // per-doc session dir keeps server builds warm without colliding across docs
     sessionRef.current = persistent && docName ? `${sid}_${hash(workspaceName + docName)}` : sid;
     setTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
-    fetch("/api/health").then((r) => r.json()).then(setHealth).catch(() => setHealth({ ok: false }));
+    fetch(`${COMPILE_BASE}/api/health`).then((r) => r.json()).then(setHealth).catch(() => setHealth({ ok: false }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -125,7 +128,7 @@ export default function Studio({
       inflight.current = ctrl;
       setBusy(true);
       try {
-        const res = await fetch("/api/compile", {
+        const res = await fetch(`${COMPILE_BASE}/api/compile`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),

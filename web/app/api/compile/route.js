@@ -7,6 +7,19 @@ import path from "node:path";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// allow the compiler to be called cross-origin (e.g. browser on Netlify -> Render)
+const CORS = {
+  "Access-Control-Allow-Origin": process.env.COMPILE_ALLOW_ORIGIN || "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+function json(data, init = {}) {
+  return Response.json(data, { ...init, headers: { ...CORS, ...(init.headers || {}) } });
+}
+export function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS });
+}
+
 const MAX_SOURCE = 512 * 1024;
 const COMPILE_TIMEOUT_MS = 90_000;
 const SESSIONS_ROOT = path.join(tmpdir(), "markus-web-sessions");
@@ -119,7 +132,7 @@ export async function POST(request) {
   try {
     body = await request.json();
   } catch {
-    return Response.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
+    return json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
   }
   const source = typeof body.source === "string" ? body.source : "";
   const template = typeof body.template === "string" ? body.template.trim() : "";
@@ -129,10 +142,10 @@ export async function POST(request) {
   const sid = String(body.sessionId || "default").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || "default";
 
   if (!source.trim()) {
-    return Response.json({ ok: false, error: "Empty document" }, { status: 400 });
+    return json({ ok: false, error: "Empty document" }, { status: 400 });
   }
   if (source.length > MAX_SOURCE) {
-    return Response.json({ ok: false, error: "Document too large" }, { status: 413 });
+    return json({ ok: false, error: "Document too large" }, { status: 413 });
   }
 
   const markus = findMarkus();
@@ -177,7 +190,7 @@ export async function POST(request) {
     reapOldSessions(); // fire-and-forget
 
     const failed = Boolean(error);
-    return Response.json({
+    return json({
       ok: !failed,
       tex,
       pdf,
