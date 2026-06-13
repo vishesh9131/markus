@@ -155,8 +155,12 @@ export default function PdfViewer({ data, fileName = "document.pdf" }) {
         wraps.push(wrap);
       }
       if (cancelled) return;
+      // keep the reader's place across live re-renders
+      const sc = scrollRef.current;
+      const ratio = sc && sc.scrollHeight ? sc.scrollTop / sc.scrollHeight : 0;
       host.replaceChildren(...wraps);
       canvasesRef.current = wraps;
+      if (sc && ratio) sc.scrollTop = ratio * sc.scrollHeight;
     })();
 
     return () => {

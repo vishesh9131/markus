@@ -40,6 +40,23 @@ If the CLI isn't auto-detected (`../.venv/bin/markus`, PATH), point at it:
 MARKUS_BIN=/path/to/markus npm run dev
 ```
 
+## Performance
+
+Live editing uses a fast path so the preview keeps up with typing:
+
+- each browser tab gets a **persistent session work dir** on the server, so
+  latexmk/pdflatex builds stay *warm* (aux files are reused) instead of starting
+  cold in a throwaway temp dir every keystroke
+- while typing, the API runs a **single `pdflatex` pass** (`markus build --fast`)
+  — about 0.5s — instead of the full multi-pass latexmk (~2s). Cross-references
+  and citations come from the previous pass (one compile behind)
+- structural changes (load example, switch template, first load) and the manual
+  **Compile** button do a correct full build that re-seeds the warm cache
+- the editor debounce is 350ms; the in-browser PDF keeps your scroll position
+  across re-renders
+
+Net effect: continuous typing previews in ~0.9s instead of ~3s.
+
 ## How it works
 
 - `POST /api/compile` `{source, template?, format: "pdf"|"tex"}` — writes the

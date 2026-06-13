@@ -80,13 +80,25 @@ def latex_env_for_template(template: str | None = None) -> dict[str, str]:
     return env
 
 
-def find_latexmk() -> str | None:
+def _find_tool(name: str) -> str | None:
     with_tex_path = augmented_path_env().get("PATH", "")
-    found = shutil.which("latexmk", path=with_tex_path)
+    found = shutil.which(name, path=with_tex_path)
     if found:
         return found
     for d in tex_bin_dirs():
-        candidate = d / "latexmk"
+        candidate = d / name
         if candidate.is_file():
             return str(candidate)
     return None
+
+
+def find_latexmk() -> str | None:
+    return _find_tool("latexmk")
+
+
+def find_pdflatex() -> str | None:
+    return _find_tool("pdflatex")
+
+
+def find_bibtex() -> str | None:
+    return _find_tool("bibtex")

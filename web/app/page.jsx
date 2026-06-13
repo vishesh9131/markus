@@ -9,7 +9,7 @@ import { DEFAULT_EXAMPLE, EXAMPLES, TEMPLATES } from "../lib/examples";
 // PDF.js touches the DOM/worker — load it client-side only.
 const PdfViewer = dynamic(() => import("../components/PdfViewer"), { ssr: false });
 
-const DEBOUNCE_MS = 900;
+const DEBOUNCE_MS = 350;
 const STORAGE_KEY = "markus-studio-doc";
 
 // Manus-toned light editor theme (warm paper, near-black ink)
@@ -53,13 +53,20 @@ export default function Studio() {
   const sourceRef = useRef("");
   const pdfUrlRef = useRef(null);
   const dragging = useRef(false);
+  const sessionRef = useRef(null);
 
-  // boot: restore doc, check CLI
+  // boot: restore doc, session id, check CLI
   useEffect(() => {
     const saved = typeof window !== "undefined" && window.localStorage.getItem(STORAGE_KEY);
     const initial = saved || EXAMPLES[DEFAULT_EXAMPLE];
     setSource(initial);
     sourceRef.current = initial;
+    let sid = window.localStorage.getItem("markus-studio-session");
+    if (!sid) {
+      sid = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
+      window.localStorage.setItem("markus-studio-session", sid);
+    }
+    sessionRef.current = sid;
     fetch("/api/health")
       .then((r) => r.json())
       .then(setHealth)
@@ -68,11 +75,15 @@ export default function Studio() {
   }, []);
 
   const compile = useCallback(
-    async (templateOverride) => {
+    async (opts = {}) => {
       const body = {
         source: sourceRef.current,
-        template: templateOverride !== undefined ? templateOverride : template,
+        template: opts.template !== undefined ? opts.template : template,
         format: "pdf",
+        sessionId: sessionRef.current,
+        // single fast pdflatex pass while typing; full latexmk on demand
+        fast: opts.fast !== false,
+        reset: opts.reset === true,
       };
       if (!body.source.trim()) return;
       if (inflight.current) inflight.current.abort();
@@ -112,9 +123,9 @@ export default function Studio() {
     [template]
   );
 
-  // initial compile once the source is loaded
+  // initial compile once the source is loaded (cold build seeds the warm cache)
   useEffect(() => {
-    if (source && !pdfUrl && !busy && tex === null) compile();
+    if (source && !pdfUrl && !busy && tex === null) compile({ fast: true, reset: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source]);
 
@@ -125,7 +136,7 @@ export default function Studio() {
       window.localStorage.setItem(STORAGE_KEY, value);
       if (!auto) return;
       clearTimeout(timer.current);
-      timer.current = setTimeout(() => compile(), DEBOUNCE_MS);
+      timer.current = setTimeout(() => compile({ fast: true }), DEBOUNCE_MS);
     },
     [auto, compile]
   );
@@ -136,12 +147,12 @@ export default function Studio() {
     setSource(doc);
     sourceRef.current = doc;
     window.localStorage.setItem(STORAGE_KEY, doc);
-    compile();
+    compile({ fast: true, reset: true });
   };
 
   const changeTemplate = (t) => {
     setTemplate(t);
-    compile(t);
+    compile({ template: t, fast: true, reset: true });
   };
 
   const download = (kind) => {
@@ -223,7 +234,7 @@ export default function Studio() {
           ))}
         </select>
 
-        <button className="compile" onClick={() => compile()} disabled={busy}>
+        <button className="compile" onClick={() => compile({ fast: false, reset: true })} disabled={busy} title="Full build (resolves all references)">
           {busy ? "Compiling…" : "Compile"}
         </button>
 

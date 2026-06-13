@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -9,6 +9,8 @@ export const dynamic = "force-dynamic";
 
 const MAX_SOURCE = 512 * 1024;
 const COMPILE_TIMEOUT_MS = 90_000;
+const SESSIONS_ROOT = path.join(tmpdir(), "markus-web-sessions");
+const SESSION_TTL_MS = 2 * 60 * 60 * 1000; // reap idle sessions after 2h
 
 // demo bibliography available to every web document as `bib: refs.bib`
 const DEMO_BIB = `@article{knuth1984, author={Donald Knuth}, title={Literate Programming},
@@ -21,7 +23,7 @@ title={Attention Is All You Need}, booktitle={NeurIPS}, year={2017}}
 howpublished={\\url{https://github.com/vishesh9131/markus}}, year={2026}}
 `;
 
-// 1x1 blue PNG so examples can use ![..](fig.png) without a real asset
+// small blue PNG so examples can use ![..](fig.png) without a real asset
 const DEMO_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAUAAAADICAIAAAAWZq/8AAACYElEQVR4nO3TQQ0AIBDAsFOHJiQi" +
     "Cw98yJImFbDPZu0DRM33AuCZgSHMwBBmYAgzMIQZGMIMDGEGhjADQ5iBIczAEGZgCDMwhBkYwgwM" +
@@ -38,6 +40,21 @@ const DEMO_PNG = Buffer.from(
   "base64"
 );
 
+// serialize compiles per session so two pdflatex runs never share a dir at once
+const chains = new Map();
+function withLock(key, fn) {
+  const prev = chains.get(key) || Promise.resolve();
+  const run = prev.then(fn, fn);
+  chains.set(
+    key,
+    run.then(
+      () => {},
+      () => {}
+    )
+  );
+  return run;
+}
+
 function findMarkus() {
   if (process.env.MARKUS_BIN && existsSync(process.env.MARKUS_BIN)) {
     return process.env.MARKUS_BIN;
@@ -51,7 +68,7 @@ function findMarkus() {
   for (const c of candidates) {
     if (existsSync(c)) return c;
   }
-  return "markus"; // hope it's on PATH
+  return "markus";
 }
 
 function run(cmd, args, opts = {}) {
@@ -77,6 +94,26 @@ function splitStderr(stderr) {
   return { warnings, errors };
 }
 
+async function reapOldSessions() {
+  try {
+    const entries = await readdir(SESSIONS_ROOT);
+    const now = Date.now();
+    await Promise.all(
+      entries.map(async (name) => {
+        const p = path.join(SESSIONS_ROOT, name);
+        try {
+          const s = await stat(p);
+          if (now - s.mtimeMs > SESSION_TTL_MS) await rm(p, { recursive: true, force: true });
+        } catch {
+          /* ignore */
+        }
+      })
+    );
+  } catch {
+    /* no sessions yet */
+  }
+}
+
 export async function POST(request) {
   let body;
   try {
@@ -87,6 +124,10 @@ export async function POST(request) {
   const source = typeof body.source === "string" ? body.source : "";
   const template = typeof body.template === "string" ? body.template.trim() : "";
   const wantPdf = body.format !== "tex";
+  const fast = wantPdf && body.fast !== false;
+  const reset = body.reset === true; // wipe warm cache (template/example switch)
+  const sid = String(body.sessionId || "default").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || "default";
+
   if (!source.trim()) {
     return Response.json({ ok: false, error: "Empty document" }, { status: 400 });
   }
@@ -95,18 +136,25 @@ export async function POST(request) {
   }
 
   const markus = findMarkus();
-  const work = await mkdtemp(path.join(tmpdir(), "markus-web-"));
-  const t0 = Date.now();
-  try {
+  const work = path.join(SESSIONS_ROOT, sid);
+  const outDir = path.join(work, "out");
+
+  return withLock(sid, async () => {
+    const t0 = Date.now();
+    if (reset) await rm(outDir, { recursive: true, force: true });
+    await mkdir(outDir, { recursive: true });
     const src = path.join(work, "doc.mks");
     await writeFile(src, source, "utf8");
-    await writeFile(path.join(work, "refs.bib"), DEMO_BIB, "utf8");
-    await writeFile(path.join(work, "fig.png"), DEMO_PNG);
-    const outDir = path.join(work, "out");
+    // static assets: write once so their mtime stays stable (keeps builds warm)
+    for (const [name, content] of [["refs.bib", DEMO_BIB], ["fig.png", DEMO_PNG]]) {
+      const p = path.join(work, name);
+      if (!existsSync(p)) await writeFile(p, content);
+    }
 
     const args = ["build", src, "-o", outDir];
     if (template) args.push("-t", template);
     if (!wantPdf) args.push("--tex-only");
+    if (fast) args.push("--fast");
 
     const { error, stderr } = await run(markus, args, { cwd: work });
     const { warnings, errors } = splitStderr(stderr);
@@ -117,7 +165,6 @@ export async function POST(request) {
     } catch {
       /* parse failed before tex was written */
     }
-
     let pdf = null;
     if (wantPdf) {
       try {
@@ -127,12 +174,15 @@ export async function POST(request) {
       }
     }
 
+    reapOldSessions(); // fire-and-forget
+
     const failed = Boolean(error);
     return Response.json({
       ok: !failed,
       tex,
       pdf,
       warnings,
+      fast,
       error: failed
         ? errors.join("\n") ||
           (error.code === "ENOENT"
@@ -143,7 +193,5 @@ export async function POST(request) {
         : null,
       ms: Date.now() - t0,
     });
-  } finally {
-    rm(work, { recursive: true, force: true }).catch(() => {});
-  }
+  });
 }

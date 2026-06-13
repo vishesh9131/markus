@@ -16,7 +16,7 @@ from markus.check import check_document
 from markus.latex import write_tex
 from markus.parser import MarkusParseError, parse
 from markus.templates_registry import list_templates, resolve_template
-from markus.texpath import find_latexmk, latex_env_for_template
+from markus.texpath import find_bibtex, find_latexmk, find_pdflatex, latex_env_for_template
 
 DEFAULT_TEMPLATE = "article"
 AUX_DIR_NAME = ".markus-aux"
@@ -134,6 +134,77 @@ def _compile_pdf(
         click.secho(f"warning: {w}", fg="yellow", err=True)
 
 
+def _run_pdflatex(pdflatex: str, tex_path: Path, out_dir: Path, env, cwd: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [
+            pdflatex,
+            "-interaction=nonstopmode",
+            "-output-directory",
+            str(out_dir.resolve()),
+            str(tex_path.resolve()),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        cwd=cwd,
+    )
+
+
+def _compile_pdf_fast(
+    tex_path: Path,
+    out_dir: Path,
+    template: str | None = None,
+    work_dir: Path | None = None,
+) -> None:
+    """Fast preview build: a single pdflatex pass when warm, full sequence when cold.
+
+    Aux files live beside the PDF in out_dir so consecutive edits stay warm.
+    Cross-references/citations use the previous pass's .aux/.bbl (one compile
+    behind), which is the right trade-off for live preview.
+    """
+    pdflatex = find_pdflatex()
+    if not pdflatex:
+        # no pdflatex — fall back to the canonical latexmk path
+        _compile_pdf(tex_path, out_dir, template, work_dir=work_dir)
+        return
+    env = latex_env_for_template(template)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cwd = str((work_dir or tex_path.parent).resolve())
+    # let pdflatex/bibtex find images and the copied .bib
+    for var in ("BIBINPUTS", "TEXINPUTS"):
+        env[var] = f"{out_dir.resolve()}{os.pathsep}{cwd}{os.pathsep}{env.get(var, '')}"
+    aux = out_dir / f"{tex_path.stem}.aux"
+    warm = aux.exists()
+
+    result = _run_pdflatex(pdflatex, tex_path, out_dir, env, cwd)
+    if not warm:
+        # cold start: resolve bibliography + cross-references once
+        tex = tex_path.read_text(encoding="utf-8", errors="replace")
+        bibtex = find_bibtex()
+        if bibtex and "\\bibliography{" in tex and aux.exists():
+            subprocess.run(
+                [bibtex, tex_path.stem],
+                capture_output=True, text=True, encoding="utf-8",
+                errors="replace", env=env, cwd=str(out_dir.resolve()),
+            )
+            _run_pdflatex(pdflatex, tex_path, out_dir, env, cwd)
+        result = _run_pdflatex(pdflatex, tex_path, out_dir, env, cwd)
+
+    log_path = out_dir / f"{tex_path.stem}.log"
+    pdf_path = out_dir / f"{tex_path.stem}.pdf"
+    if result.returncode != 0 and not pdf_path.exists():
+        errors = _extract_log_errors(log_path)
+        msg = [f"LaTeX build failed for {tex_path.name}"] + [f"  ! {e}" for e in errors]
+        if not errors:
+            msg += [f"  {ln}" for ln in (result.stdout or "").strip().splitlines()[-10:]]
+        msg.append(f"Full log: {log_path}")
+        raise click.ClickException("\n".join(msg))
+    for w in _scan_log_warnings(log_path):
+        click.secho(f"warning: {w}", fg="yellow", err=True)
+
+
 def _parse_source(source: Path):
     text = source.read_text(encoding="utf-8")
     try:
@@ -178,7 +249,7 @@ def _resolve_template_name(doc, template: str | None) -> str:
 
 
 def _build_once(source: Path, out_dir: Path | None, template: str | None,
-                tex_only: bool, pdf: bool) -> None:
+                tex_only: bool, pdf: bool, fast: bool = False) -> None:
     text, doc = _parse_source(source)
     tpl = _resolve_template_name(doc, template)
     out = out_dir or source.parent
@@ -205,7 +276,10 @@ def _build_once(source: Path, out_dir: Path | None, template: str | None,
     if tex_only or not pdf:
         return
 
-    _compile_pdf(tex_path, out, template=tpl, work_dir=source.parent)
+    if fast:
+        _compile_pdf_fast(tex_path, out, template=tpl, work_dir=source.parent)
+    else:
+        _compile_pdf(tex_path, out, template=tpl, work_dir=source.parent)
     pdf_path = out / f"{stem}.pdf"
     if pdf_path.exists():
         click.echo(f"Wrote {pdf_path}")
@@ -231,6 +305,12 @@ def _build_once(source: Path, out_dir: Path | None, template: str | None,
 @click.option("--tex-only", is_flag=True, help="Emit .tex only, do not run latexmk")
 @click.option("--pdf/--no-pdf", default=True, help="Compile PDF with latexmk")
 @click.option("-w", "--watch", is_flag=True, help="Rebuild whenever the source or bibliography changes")
+@click.option(
+    "--fast",
+    is_flag=True,
+    help="Fast preview: single pdflatex pass reusing the output dir "
+    "(refs/citations may lag one pass). Great for live editing.",
+)
 def build(
     source: Path,
     out_dir: Path | None,
@@ -238,13 +318,14 @@ def build(
     tex_only: bool,
     pdf: bool,
     watch: bool,
+    fast: bool,
 ) -> None:
     """Compile a .mks file to .tex and optionally PDF."""
     if source.suffix != ".mks":
         click.secho(f"warning: expected .mks extension, got {source.suffix}", fg="yellow", err=True)
 
     if not watch:
-        _build_once(source, out_dir, template, tex_only, pdf)
+        _build_once(source, out_dir, template, tex_only, pdf, fast=fast)
         return
 
     def deps() -> list[Path]:
@@ -269,7 +350,7 @@ def build(
             if current != last:
                 last = current
                 try:
-                    _build_once(source, out_dir, template, tex_only, pdf)
+                    _build_once(source, out_dir, template, tex_only, pdf, fast=fast)
                 except click.ClickException as exc:
                     click.secho(f"error: {exc.message}", fg="red", err=True)
                 click.echo("Waiting for changes...")
