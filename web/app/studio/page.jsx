@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { SignOutButton } from "../../components/AuthButtons";
 import Loader from "../../components/Loader";
-import { runUpgrade } from "../../lib/upgrade";
+import { runUpgrade, redeemPromo } from "../../lib/upgrade";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -38,6 +38,21 @@ export default function Dashboard() {
       setBusy(false);
     }
   }, [data, load]);
+
+  const redeem = useCallback(async () => {
+    const code = window.prompt("Enter your promo code");
+    if (!code) return;
+    try {
+      setBusy(true);
+      await redeemPromo(code.trim());
+      await load();
+      alert("Promo applied — you're Premium! 🎉");
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }, [load]);
 
   // auto-open upgrade if redirected with ?upgrade=1
   useEffect(() => {
@@ -95,9 +110,14 @@ export default function Dashboard() {
           {account.tier === "premium" ? "Premium" : "Free"}
         </span>
         {free && (
-          <button className="ghost-btn" onClick={upgrade} disabled={busy}>
-            Upgrade ₹9
-          </button>
+          <>
+            <button className="ghost-btn" onClick={redeem} disabled={busy}>
+              Redeem code
+            </button>
+            <button className="ghost-btn" onClick={upgrade} disabled={busy}>
+              Upgrade ₹9
+            </button>
+          </>
         )}
         <span className="dash-user" title={user.email}>{user.email}</span>
         <SignOutButton />

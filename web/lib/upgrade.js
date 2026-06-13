@@ -22,6 +22,13 @@ async function postJson(url, body) {
   return data;
 }
 
+// Redeem a promo code → premium (no payment). Returns the updated account.
+export async function redeemPromo(code) {
+  const res = await postJson("/api/billing/promo", { code });
+  if (!res.ok) throw new Error(res.error || "Invalid promo code");
+  return res.account;
+}
+
 export async function runUpgrade(user) {
   const orderRes = await postJson("/api/billing/order");
   if (!orderRes.ok) throw new Error(orderRes.error || "Could not start checkout");
