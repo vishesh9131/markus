@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { SignOutButton } from "../../../components/AuthButtons";
 import Loader from "../../../components/Loader";
+import GrantDrive from "../../../components/GrantDrive";
 import { useDialog } from "../../../components/Dialog";
 import { runUpgrade, redeemPromo } from "../../../lib/upgrade";
 
@@ -15,7 +16,10 @@ export default function AccountPage() {
 
   const load = useCallback(async () => {
     const res = await fetch("/api/workspaces").then((r) => r.json());
-    if (!res.ok) return setError(res.error || "Failed to load");
+    if (!res.ok) {
+      if (res.code === "DRIVE_SCOPE") return setError("DRIVE_SCOPE");
+      return setError(res.error || "Failed to load");
+    }
     setData(res);
   }, []);
 
@@ -58,6 +62,7 @@ export default function AccountPage() {
     }
   }, [load, dialog]);
 
+  if (error === "DRIVE_SCOPE") return <div className="dash"><GrantDrive /></div>;
   if (error) return <div className="dash"><div className="dash-empty">{error}</div></div>;
   if (!data) return <div className="dash"><Loader label="Loading your account…" /></div>;
 

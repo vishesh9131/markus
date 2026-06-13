@@ -260,7 +260,8 @@ html[data-theme="dark"] .topbar select {
   font-weight: 500;
 }
 
-.editor-pane .cm-theme,
+/* @uiw/react-codemirror wraps in .cm-theme-light / .cm-theme-dark */
+.editor-pane [class*="cm-theme"],
 .editor-pane .cm-editor {
   height: 100%;
 }
@@ -269,11 +270,13 @@ html[data-theme="dark"] .topbar select {
   font-family: var(--mono) !important;
   font-size: 13.5px;
   line-height: 1.6;
+  overflow: auto;
 }
 
 .editor-wrap {
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
 }
 
 .divider {
@@ -600,6 +603,7 @@ html[data-theme="dark"] .topbar select {
   font-family: var(--sans);
   cursor: pointer;
   text-decoration: none;
+  white-space: nowrap;
   transition: opacity 0.12s ease;
 }
 .cta:hover { opacity: 0.88; }
@@ -620,6 +624,7 @@ html[data-theme="dark"] .topbar select {
   font-family: var(--sans);
   cursor: pointer;
   text-decoration: none;
+  white-space: nowrap;
   transition: border-color 0.12s ease;
 }
 .ghost-btn:hover { border-color: var(--ink-soft); }
@@ -707,7 +712,20 @@ html[data-theme="dark"] .topbar select {
   display: flex; align-items: center; gap: 12px;
   padding: 12px 26px; border-bottom: 1px solid var(--line); background: var(--paper);
 }
+.dash-nav { flex-wrap: wrap; }
 .dash-user { font-size: 12.5px; color: var(--ink-faint); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* mobile: keep header controls tidy, never truncate button labels onto 2 lines */
+@media (max-width: 600px) {
+  .dash-nav { gap: 8px; padding: 10px 16px; }
+  .dash-nav .brand { margin-right: auto; }
+  .dash-user { max-width: 120px; order: 5; }
+  .dash-main { padding: 26px 5vw; }
+  .dash-head { flex-direction: column; align-items: stretch; }
+  .dash-head .cta { width: 100%; justify-content: center; }
+  .lp-actions { width: 100%; }
+  .lp-actions .cta, .lp-actions .ghost-btn { flex: 1; justify-content: center; }
+}
 .dash-main { padding: 36px 7vw; max-width: 1100px; width: 100%; margin: 0 auto; }
 .dash-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 26px; }
 .dash-head h1 { font-family: var(--serif); font-size: 30px; margin: 0 0 6px; }
@@ -899,3 +917,32 @@ a.dash-user:hover { color: var(--ink); }
 .acct-stats li:last-child { border-bottom: none; }
 .acct-stats span { color: var(--ink-soft); }
 @media (max-width: 640px) { .acct-grid { grid-template-columns: 1fr; } }
+
+/* landing theme toggle */
+.lp-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.lp-theme-toggle:hover { color: var(--ink); border-color: var(--ink-soft); }
+
+/* grant-drive screen */
+.grant-drive { display: flex; align-items: center; justify-content: center; min-height: 70vh; padding: 24px; }
+.grant-card {
+  max-width: 460px; text-align: center; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 16px; padding: 32px 28px; box-shadow: var(--shadow);
+}
+.grant-icon { color: var(--accent); display: flex; justify-content: center; margin-bottom: 12px; }
+html[data-theme="dark"] .grant-icon { color: var(--ink); }
+.grant-card h2 { font-family: var(--serif); font-size: 22px; margin: 0 0 10px; }
+.grant-card p { color: var(--ink-soft); font-size: 14px; line-height: 1.55; margin: 0 0 12px; }
+.grant-hint { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 13px; }
+.grant-card .cta { margin-top: 8px; }

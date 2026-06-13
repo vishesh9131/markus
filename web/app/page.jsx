@@ -3,6 +3,7 @@ import { auth, AUTH_MODE } from "../auth";
 import { PREMIUM, FREE_LIMITS } from "../lib/quota";
 import { SignInButton } from "../components/AuthButtons";
 import HeroCanvas from "../components/HeroCanvas";
+import ThemeToggle from "../components/ThemeToggle";
 
 export default async function Landing() {
   const session = await auth();
@@ -18,6 +19,7 @@ export default async function Landing() {
         <nav className="lp-links">
           <a href="#features">Features</a>
           <a href="#pricing">Pricing</a>
+          <ThemeToggle className="lp-theme-toggle" />
           {signedIn ? (
             <Link className="cta sm" href="/studio">Open Studio</Link>
           ) : (

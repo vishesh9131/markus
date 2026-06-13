@@ -9,6 +9,16 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const session = await auth();
   if (!session?.user) return Response.json({ ok: false, error: "Not signed in" }, { status: 401 });
+  if (session.googleAccessToken && session.driveGranted === false) {
+    return Response.json(
+      {
+        ok: false,
+        code: "DRIVE_SCOPE",
+        error: "Markus needs permission to save files in your Google Drive.",
+      },
+      { status: 403 }
+    );
+  }
   const store = getStore(session);
   const account = await getAccount(store, session.user.email);
   const workspaces = await store.listWorkspaces();

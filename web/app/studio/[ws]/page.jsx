@@ -4,6 +4,7 @@ import Link from "next/link";
 import { use, useCallback, useEffect, useState } from "react";
 import Studio from "../../../components/Studio";
 import Loader from "../../../components/Loader";
+import GrantDrive from "../../../components/GrantDrive";
 import { useDialog } from "../../../components/Dialog";
 import { runUpgrade } from "../../../lib/upgrade";
 
@@ -30,7 +31,10 @@ export default function WorkspaceEditor({ params }) {
 
   const load = useCallback(async () => {
     const res = await fetch("/api/workspaces").then((r) => r.json());
-    if (!res.ok) return setState({ status: "error", error: res.error });
+    if (!res.ok) {
+      if (res.code === "DRIVE_SCOPE") return setState({ status: "drive" });
+      return setState({ status: "error", error: res.error });
+    }
     const ws = res.workspaces.find((w) => w.id === wsId);
     if (!ws) return setState({ status: "error", error: "Workspace not found" });
     setState({ status: "ready", ws, account: res.account, limits: res.limits, user: res.user });
@@ -96,6 +100,7 @@ export default function WorkspaceEditor({ params }) {
   }, [state, load, dialog]);
 
   if (state.status === "loading") return <div className="dash"><Loader label="Opening workspace…" /></div>;
+  if (state.status === "drive") return <div className="dash"><GrantDrive /></div>;
   if (state.status === "error") return <div className="dash"><div className="dash-empty">{state.error} · <Link href="/studio">back</Link></div></div>;
 
   const { ws, account } = state;

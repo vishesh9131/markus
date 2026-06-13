@@ -50,12 +50,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.googleAccessToken = account.access_token;
         token.googleRefreshToken = account.refresh_token ?? token.googleRefreshToken;
         token.googleExpiresAt = account.expires_at;
+        token.googleScope = account.scope || "";
       }
       return token;
     },
     async session({ session, token }) {
       session.googleAccessToken = token.googleAccessToken || null;
       session.isDemo = !token.googleAccessToken;
+      // did the user actually grant the Drive permission?
+      session.driveGranted =
+        !token.googleAccessToken || Boolean(token.googleScope?.includes("drive.file"));
       return session;
     },
     authorized({ auth: session, request: { nextUrl } }) {
