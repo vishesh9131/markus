@@ -25,21 +25,37 @@ export async function POST() {
     });
   }
 
-  const Razorpay = (await import("razorpay")).default;
-  const rzp = new Razorpay({ key_id: keyId, key_secret: keySecret });
-  const order = await rzp.orders.create({
-    amount: PREMIUM.amountPaise,
-    currency: "INR",
-    receipt: `markus_${crypto.randomUUID()}`,
-    notes: { email: session.user.email, plan: `premium_${PREMIUM.months}m` },
-  });
-  return Response.json({
-    ok: true,
-    stub: false,
-    keyId,
-    orderId: order.id,
-    amount: order.amount,
-    currency: order.currency,
-    months: PREMIUM.months,
-  });
+  // Call Razorpay's REST API directly (no SDK — avoids serverless bundling issues)
+  try {
+    const basic = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+    const r = await fetch("https://api.razorpay.com/v1/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Basic ${basic}` },
+      body: JSON.stringify({
+        amount: PREMIUM.amountPaise,
+        currency: "INR",
+        receipt: `markus_${crypto.randomUUID()}`,
+        notes: { email: session.user.email, plan: `premium_${PREMIUM.months}m` },
+      }),
+    });
+    const order = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const msg = order?.error?.description || `Razorpay error (${r.status})`;
+      return Response.json({ ok: false, error: msg }, { status: 502 });
+    }
+    return Response.json({
+      ok: true,
+      stub: false,
+      keyId,
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      months: PREMIUM.months,
+    });
+  } catch (e) {
+    return Response.json(
+      { ok: false, error: `Could not reach Razorpay: ${e?.message || String(e)}` },
+      { status: 502 }
+    );
+  }
 }
