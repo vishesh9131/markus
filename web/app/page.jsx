@@ -256,7 +256,12 @@ export default function Studio() {
         </button>
 
         <div className="status">
-          <span className={`dot ${statusDot}`} />
+          {busy ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img className="status-mks" src="/mks-loader.gif" alt="" />
+          ) : (
+            <span className={`dot ${statusDot}`} />
+          )}
           {statusText}
           {health && !health.ok && <span style={{ color: "var(--red)" }}>· markus CLI not found</span>}
         </div>
@@ -310,7 +315,8 @@ export default function Studio() {
                 <PdfViewer data={pdfData} fileName="document.pdf" />
               ) : (
                 <div className="placeholder">
-                  <div className="ph-mark">M</div>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img className="ph-loader" src="/mks-loader.gif" alt="markus" />
                   <div>The compiled PDF will appear here.</div>
                   <div className="ph-sub">
                     Requires the markus CLI and latexmk (TeX Live / MacTeX) on this machine.

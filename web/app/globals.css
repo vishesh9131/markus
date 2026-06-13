@@ -482,11 +482,17 @@ body {
   background: var(--surface);
 }
 
-.placeholder .ph-mark {
-  font-family: var(--serif);
-  font-size: 38px;
-  color: var(--ink-faint);
-  line-height: 1;
+.placeholder .ph-loader {
+  width: 120px;
+  height: auto;
+  opacity: 0.9;
+  margin-bottom: 2px;
+}
+
+.status-mks {
+  height: 16px;
+  width: auto;
+  display: block;
 }
 
 .placeholder .ph-sub {
