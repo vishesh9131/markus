@@ -296,7 +296,7 @@ export default function Studio() {
           <div className="preview-body">
             {tab === "pdf" &&
               (pdfData ? (
-                <PdfViewer data={pdfData} />
+                <PdfViewer data={pdfData} fileName="document.pdf" />
               ) : (
                 <div className="placeholder">
                   <div className="ph-mark">M</div>
