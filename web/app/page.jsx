@@ -1,13 +1,32 @@
 "use client";
 
 import { markdown } from "@codemirror/lang-markdown";
-import { oneDark } from "@codemirror/theme-one-dark";
-import CodeMirror from "@uiw/react-codemirror";
+import CodeMirror, { EditorView } from "@uiw/react-codemirror";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_EXAMPLE, EXAMPLES, TEMPLATES } from "../lib/examples";
 
 const DEBOUNCE_MS = 900;
 const STORAGE_KEY = "markus-studio-doc";
+
+// Manus-toned light editor theme (warm paper, near-black ink)
+const markusEditorTheme = EditorView.theme(
+  {
+    "&": { backgroundColor: "#ffffff", color: "#1a1916" },
+    ".cm-content": { caretColor: "#1a1916" },
+    ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#1a1916" },
+    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
+      { backgroundColor: "#e7e4db" },
+    ".cm-gutters": {
+      backgroundColor: "#faf9f5",
+      color: "#bcb8ad",
+      border: "none",
+    },
+    ".cm-activeLine": { backgroundColor: "#faf9f5" },
+    ".cm-activeLineGutter": { backgroundColor: "#f1efe8", color: "#8a8780" },
+    ".cm-lineNumbers .cm-gutterElement": { padding: "0 10px 0 12px" },
+  },
+  { dark: false }
+);
 
 export default function Studio() {
   const [source, setSource] = useState("");
@@ -174,8 +193,8 @@ export default function Studio() {
     <div className="app">
       <div className="topbar">
         <div className="brand">
-          <span className="name">markus</span>
-          <span className="tag">studio — .mks → LaTeX → PDF</span>
+          <span className="name">Markus</span>
+          <span className="tag">studio</span>
         </div>
 
         <select value={example} onChange={(e) => loadExample(e.target.value)} title="Load example">
@@ -209,14 +228,14 @@ export default function Studio() {
 
         <div className="spacer" />
 
-        <button onClick={() => download("mks")} title="Download .mks source">
-          ⬇ .mks
+        <button className="ghost" onClick={() => download("mks")} title="Download .mks source">
+          .mks
         </button>
-        <button onClick={() => download("tex")} disabled={!tex} title="Download generated LaTeX">
-          ⬇ .tex
+        <button className="ghost" onClick={() => download("tex")} disabled={!tex} title="Download generated LaTeX">
+          .tex
         </button>
-        <button onClick={() => download("pdf")} disabled={!pdfUrl} title="Download PDF">
-          ⬇ .pdf
+        <button className="ghost" onClick={() => download("pdf")} disabled={!pdfUrl} title="Download PDF">
+          .pdf
         </button>
 
         <div className="status">
@@ -228,14 +247,17 @@ export default function Studio() {
 
       <div className="main">
         <div className="pane editor-pane" style={{ flexBasis: `${split}%`, flexGrow: 0, flexShrink: 0 }}>
-          <CodeMirror
-            value={source}
-            height="100%"
-            theme={oneDark}
-            extensions={[markdown()]}
-            onChange={onChange}
-            basicSetup={{ lineNumbers: true, foldGutter: false, highlightActiveLine: true }}
-          />
+          <div className="pane-head">source · .mks</div>
+          <div className="editor-wrap">
+            <CodeMirror
+              value={source}
+              height="100%"
+              theme="light"
+              extensions={[markdown(), markusEditorTheme, EditorView.lineWrapping]}
+              onChange={onChange}
+              basicSetup={{ lineNumbers: true, foldGutter: false, highlightActiveLine: true }}
+            />
+          </div>
         </div>
 
         <div
@@ -271,9 +293,9 @@ export default function Studio() {
                 <iframe key={pdfUrl} src={pdfUrl} title="PDF preview" />
               ) : (
                 <div className="placeholder">
-                  <div style={{ fontSize: 28 }}>📄</div>
+                  <div className="ph-mark">M</div>
                   <div>The compiled PDF will appear here.</div>
-                  <div style={{ fontSize: 12 }}>
+                  <div className="ph-sub">
                     Requires the markus CLI and latexmk (TeX Live / MacTeX) on this machine.
                   </div>
                 </div>
