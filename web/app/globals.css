@@ -1018,3 +1018,23 @@ html[data-theme="dark"] .paper-sheet {
 @media (max-width: 860px) {
   .paper-sheet { transform: none; animation: none; width: 320px; }
 }
+
+/* ===================== mobile-only: workspace + studio (desktop untouched) ===================== */
+@media (max-width: 760px) {
+  /* studio editor: stack the two panes instead of side-by-side */
+  .main { flex-direction: column; padding: 10px; gap: 10px; }
+  .pane { min-width: 0; }                 /* was 260px -> caused horizontal overflow */
+  .editor-pane { flex: 0 0 46vh !important; }  /* override inline flex-basis */
+  .main > .pane:last-child { flex: 1 1 auto; min-height: 38vh; }
+  .divider { display: none; }             /* col-resize handle is desktop-only */
+
+  /* studio topbar wraps instead of overflowing */
+  .topbar { flex-wrap: wrap; padding: 8px 10px; row-gap: 6px; }
+  .topbar .brand { margin-right: auto; }
+  .topbar .spacer { display: none; }
+}
+
+@media (max-width: 600px) {
+  /* dashboard: one card per row so nothing spills off-screen */
+  .ws-grid { grid-template-columns: 1fr; }
+}
