@@ -13,7 +13,7 @@ on the right with three tabs:
 - **LaTeX** — the generated `.tex`, so you can see exactly what Markus emits
 - **Problems** — `markus check` diagnostics with `.mks` line numbers, plus LaTeX errors
 
-Also: example gallery (paper, lecture notes, letter, planner, beamer slides,
+Also: light/dark theme toggle (remembers your choice, respects system preference), example gallery (paper, lecture notes, letter, planner, beamer slides,
 assignment, CV), template override dropdown, draggable split, download buttons
 for `.mks` / `.tex` / `.pdf`, and the document persists in localStorage.
 

@@ -32,6 +32,22 @@ const markusEditorTheme = EditorView.theme(
   { dark: false }
 );
 
+// Dark editor theme (matches the dark surface palette)
+const markusEditorThemeDark = EditorView.theme(
+  {
+    "&": { backgroundColor: "#1b1f25", color: "#dfe4ea" },
+    ".cm-content": { caretColor: "#dfe4ea" },
+    ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#dfe4ea" },
+    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
+      { backgroundColor: "#2f3742" },
+    ".cm-gutters": { backgroundColor: "#21262e", color: "#5a626d", border: "none" },
+    ".cm-activeLine": { backgroundColor: "#21262e" },
+    ".cm-activeLineGutter": { backgroundColor: "#272d36", color: "#8a93a0" },
+    ".cm-lineNumbers .cm-gutterElement": { padding: "0 10px 0 12px" },
+  },
+  { dark: true }
+);
+
 export default function Studio() {
   const [source, setSource] = useState("");
   const [example, setExample] = useState(DEFAULT_EXAMPLE);
@@ -47,6 +63,7 @@ export default function Studio() {
   const [tab, setTab] = useState("pdf");
   const [split, setSplit] = useState(50);
   const [health, setHealth] = useState(null);
+  const [theme, setTheme] = useState("light");
 
   const timer = useRef(null);
   const inflight = useRef(null);
@@ -67,12 +84,25 @@ export default function Studio() {
       window.localStorage.setItem("markus-studio-session", sid);
     }
     sessionRef.current = sid;
+    setTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
     fetch("/api/health")
       .then((r) => r.json())
       .then(setHealth)
       .catch(() => setHealth({ ok: false }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((prev) => {
+      const next = prev === "dark" ? "light" : "dark";
+      document.documentElement.dataset.theme = next;
+      window.localStorage.setItem("markus-studio-theme", next);
+      return next;
+    });
+  }, []);
+
+  // cream loader on dark surfaces, ink on light
+  const loaderSrc = theme === "dark" ? "/mks-loader-cream.gif" : "/mks-loader.gif";
 
   const compile = useCallback(
     async (opts = {}) => {
@@ -258,13 +288,33 @@ export default function Studio() {
         <div className="status">
           {busy ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img className="status-mks" src="/mks-loader.gif" alt="" />
+            <img className="status-mks" src={loaderSrc} alt="" />
           ) : (
             <span className={`dot ${statusDot}`} />
           )}
           {statusText}
           {health && !health.ok && <span style={{ color: "var(--red)" }}>· markus CLI not found</span>}
         </div>
+
+        <button
+          className="icon-btn"
+          onClick={toggleTheme}
+          title={theme === "dark" ? "Switch to light" : "Switch to dark"}
+          aria-label="Toggle theme"
+        >
+          {theme === "dark" ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="4.2" stroke="currentColor" strokeWidth="1.6" />
+              <path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5 5l1.7 1.7M17.3 17.3 19 19M19 5l-1.7 1.7M6.7 17.3 5 19"
+                stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M20 14.5A8 8 0 1 1 9.5 4a6.3 6.3 0 0 0 10.5 10.5z"
+                stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+            </svg>
+          )}
+        </button>
       </div>
 
       <div className="main">
@@ -274,8 +324,12 @@ export default function Studio() {
             <CodeMirror
               value={source}
               height="100%"
-              theme="light"
-              extensions={[markdown(), markusEditorTheme, EditorView.lineWrapping]}
+              theme={theme === "dark" ? "dark" : "light"}
+              extensions={[
+                markdown(),
+                theme === "dark" ? markusEditorThemeDark : markusEditorTheme,
+                EditorView.lineWrapping,
+              ]}
               onChange={onChange}
               basicSetup={{ lineNumbers: true, foldGutter: false, highlightActiveLine: true }}
             />
@@ -316,7 +370,7 @@ export default function Studio() {
               ) : (
                 <div className="placeholder">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img className="ph-loader" src="/mks-loader.gif" alt="markus" />
+                  <img className="ph-loader" src={loaderSrc} alt="markus" />
                   <div>The compiled PDF will appear here.</div>
                   <div className="ph-sub">
                     Requires the markus CLI and latexmk (TeX Live / MacTeX) on this machine.
@@ -345,7 +399,7 @@ export default function Studio() {
             {busy && pdfData && (
               <div className="overlay">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img className="loader-gif" src="/mks-loader.gif" alt="compiling" />
+                <img className="loader-gif" src={loaderSrc} alt="compiling" />
               </div>
             )}
           </div>
