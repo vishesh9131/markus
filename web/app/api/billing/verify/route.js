@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { auth } from "../../../../auth";
 import { grantPremium, getAccount } from "../../../../lib/accounts";
+import { getStore } from "../../../../lib/storage";
 import { PREMIUM } from "../../../../lib/quota";
 
 export const runtime = "nodejs";
@@ -16,8 +17,9 @@ export async function POST(request) {
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
   if (!keySecret || body.stub) {
-    const until = await grantPremium(session.user.email, PREMIUM.months);
-    return Response.json({ ok: true, stub: true, account: await getAccount(session.user.email), premiumUntil: until });
+    const store = getStore(session);
+    const until = await grantPremium(store, PREMIUM.months);
+    return Response.json({ ok: true, stub: true, account: await getAccount(store, session.user.email), premiumUntil: until });
   }
 
   const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = body;
@@ -31,6 +33,7 @@ export async function POST(request) {
   if (expected !== razorpay_signature) {
     return Response.json({ ok: false, error: "Signature verification failed" }, { status: 400 });
   }
-  const until = await grantPremium(session.user.email, PREMIUM.months);
-  return Response.json({ ok: true, account: await getAccount(session.user.email), premiumUntil: until });
+  const store = getStore(session);
+  const until = await grantPremium(store, PREMIUM.months);
+  return Response.json({ ok: true, account: await getAccount(store, session.user.email), premiumUntil: until });
 }

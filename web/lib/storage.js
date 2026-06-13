@@ -104,6 +104,19 @@ class LocalStore {
     await fs.writeFile(path.join(this.dir, wsId, `${meta.id}.mks`), content ?? "", "utf8");
     return meta;
   }
+
+  async readAccount() {
+    try {
+      return JSON.parse(await fs.readFile(path.join(this.dir, "account.json"), "utf8"));
+    } catch {
+      return {};
+    }
+  }
+
+  async writeAccount(obj) {
+    await fs.mkdir(this.dir, { recursive: true });
+    await fs.writeFile(path.join(this.dir, "account.json"), JSON.stringify(obj, null, 2));
+  }
 }
 
 // ---------------- Google Drive backend ----------------
@@ -213,5 +226,41 @@ class DriveStore {
       fields: "id,name,modifiedTime,appProperties",
     });
     return { id: res.data.id, name: res.data.name, pages, updatedAt: res.data.modifiedTime };
+  }
+
+  // subscription state lives in an app-created file in the user's Drive,
+  // so premium survives server restarts/redeploys without a separate DB
+  async _accountFileId() {
+    const root = await this._rootId();
+    const r = await this.drive.files.list({
+      q: `name='account.json' and '${root}' in parents and trashed=false`,
+      fields: "files(id)",
+    });
+    return r.data.files?.[0]?.id || null;
+  }
+
+  async readAccount() {
+    const id = await this._accountFileId();
+    if (!id) return {};
+    try {
+      const m = await this.drive.files.get({ fileId: id, alt: "media" }, { responseType: "text" });
+      return JSON.parse(typeof m.data === "string" ? m.data : String(m.data || "{}"));
+    } catch {
+      return {};
+    }
+  }
+
+  async writeAccount(obj) {
+    const root = await this._rootId();
+    const id = await this._accountFileId();
+    const media = { mimeType: "application/json", body: JSON.stringify(obj) };
+    if (id) {
+      await this.drive.files.update({ fileId: id, media });
+    } else {
+      await this.drive.files.create({
+        requestBody: { name: "account.json", parents: [root], appProperties: { markusAccount: "1" } },
+        media,
+      });
+    }
   }
 }

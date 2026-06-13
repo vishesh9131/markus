@@ -1,28 +1,10 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
+// Subscription state is read/written through the storage backend, so it lives
+// wherever the user's files live: in their Google Drive (real login) or on
+// local disk (demo). That keeps premium status persistent on hosts with an
+// ephemeral filesystem (e.g. Render's free tier) without a separate database.
 
-// Lightweight file-backed account/subscription store.
-// NOTE: for production, swap this for a real DB (Postgres, etc.) — the shape
-// (keyed by email) is intentionally trivial to migrate. Subscription state must
-// live server-side (not in the user's Drive) so it can't be tampered with.
-const FILE = path.join(process.cwd(), ".data", "accounts.json");
-
-async function readAll() {
-  try {
-    return JSON.parse(await fs.readFile(FILE, "utf8"));
-  } catch {
-    return {};
-  }
-}
-
-async function writeAll(data) {
-  await fs.mkdir(path.dirname(FILE), { recursive: true });
-  await fs.writeFile(FILE, JSON.stringify(data, null, 2), "utf8");
-}
-
-export async function getAccount(email) {
-  const all = await readAll();
-  const a = all[email] || {};
+export async function getAccount(store, email) {
+  const a = (await store.readAccount()) || {};
   const active = a.premiumUntil && Date.parse(a.premiumUntil) > Date.now();
   return {
     email,
@@ -31,15 +13,13 @@ export async function getAccount(email) {
   };
 }
 
-export async function grantPremium(email, months) {
-  const all = await readAll();
-  const cur = all[email] || {};
-  // extend from the later of now / existing expiry
-  const base = cur.premiumUntil && Date.parse(cur.premiumUntil) > Date.now()
-    ? Date.parse(cur.premiumUntil)
-    : Date.now();
+export async function grantPremium(store, months) {
+  const a = (await store.readAccount()) || {};
+  const base =
+    a.premiumUntil && Date.parse(a.premiumUntil) > Date.now()
+      ? Date.parse(a.premiumUntil)
+      : Date.now();
   const until = new Date(base + months * 30 * 24 * 3600 * 1000).toISOString();
-  all[email] = { ...cur, premiumUntil: until };
-  await writeAll(all);
+  await store.writeAccount({ ...a, premiumUntil: until });
   return until;
 }

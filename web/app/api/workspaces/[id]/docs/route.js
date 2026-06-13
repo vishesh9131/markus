@@ -11,9 +11,9 @@ export async function POST(request, { params }) {
   const session = await auth();
   if (!session?.user) return Response.json({ ok: false, error: "Not signed in" }, { status: 401 });
   const { id: wsId } = await params;
-  const account = await getAccount(session.user.email);
-  const limits = limitsFor(account.tier);
   const store = getStore(session);
+  const account = await getAccount(store, session.user.email);
+  const limits = limitsFor(account.tier);
 
   const body = await request.json().catch(() => ({}));
   const { id, name, content, pages } = body;

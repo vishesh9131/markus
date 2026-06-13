@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const session = await auth();
   if (!session?.user) return Response.json({ ok: false, error: "Not signed in" }, { status: 401 });
-  const account = await getAccount(session.user.email);
   const store = getStore(session);
+  const account = await getAccount(store, session.user.email);
   const workspaces = await store.listWorkspaces();
   const { name, email, image } = session.user;
   return Response.json({
@@ -26,9 +26,9 @@ export async function GET() {
 export async function POST(request) {
   const session = await auth();
   if (!session?.user) return Response.json({ ok: false, error: "Not signed in" }, { status: 401 });
-  const account = await getAccount(session.user.email);
-  const limits = limitsFor(account.tier);
   const store = getStore(session);
+  const account = await getAccount(store, session.user.email);
+  const limits = limitsFor(account.tier);
 
   const { name } = await request.json().catch(() => ({}));
   const clean = (name || "").trim() || "Untitled workspace";

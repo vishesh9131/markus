@@ -1,0 +1,30 @@
+# Render blueprint — deploys Markus Studio (web + Python markus + LaTeX) as a
+# Docker web service. In Render: New > Blueprint, pick this repo, then paste the
+# secret env vars when prompted. https://render.com
+services:
+  - type: web
+    name: markus-studio
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      # --- set these in the Render dashboard (kept out of git) ---
+      - key: AUTH_SECRET # openssl rand -base64 32
+        sync: false
+      - key: AUTH_URL # your Render URL, e.g. https://markus-studio.onrender.com
+        sync: false
+      - key: AUTH_GOOGLE_ID
+        sync: false
+      - key: AUTH_GOOGLE_SECRET
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      # --- defaults (₹9 / 2 months) ---
+      - key: PREMIUM_AMOUNT_PAISE
+        value: "900"
+      - key: PREMIUM_MONTHS
+        value: "2"
