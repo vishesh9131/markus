@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       texlive-latex-extra \
       texlive-fonts-recommended \
       texlive-science \
+      texlive-plain-generic \
       lmodern \
       ghostscript \
     && rm -rf /var/lib/apt/lists/*
