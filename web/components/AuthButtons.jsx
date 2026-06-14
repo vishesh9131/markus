@@ -1,17 +1,24 @@
 "use client";
 
+import { useState } from "react";
 import { signIn, signOut } from "next-auth/react";
 
 export function SignInButton({ mode = "demo", className = "cta", children }) {
   const provider = mode === "google" ? "google" : "demo";
+  const [busy, setBusy] = useState(false);
   return (
     <button
       className={className}
-      onClick={() => signIn(provider, { callbackUrl: "/studio" })}
+      disabled={busy}
+      onClick={() => {
+        setBusy(true);
+        signIn(provider, { callbackUrl: "/studio" });
+      }}
     >
+      {busy && <span className="btn-spin" aria-hidden="true" />}
       {children || (
         <>
-          <GoogleGlyph />
+          {!busy && <GoogleGlyph />}
           {mode === "google" ? "Continue with Google" : "Try the demo"}
         </>
       )}
@@ -20,8 +27,17 @@ export function SignInButton({ mode = "demo", className = "cta", children }) {
 }
 
 export function SignOutButton({ className = "ghost-btn" }) {
+  const [busy, setBusy] = useState(false);
   return (
-    <button className={className} onClick={() => signOut({ callbackUrl: "/" })}>
+    <button
+      className={className}
+      disabled={busy}
+      onClick={() => {
+        setBusy(true);
+        signOut({ callbackUrl: "/" });
+      }}
+    >
+      {busy && <span className="btn-spin" aria-hidden="true" />}
       Sign out
     </button>
   );

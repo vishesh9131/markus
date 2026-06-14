@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_EXAMPLE, EXAMPLES, TEMPLATES } from "../lib/examples";
 import { useDialog } from "./Dialog";
+import { Btn } from "./Btn";
 import { exportPdfWithPreference } from "../lib/pdfExport";
 
 const PdfViewer = dynamic(() => import("./PdfViewer"), { ssr: false });
@@ -303,14 +304,14 @@ export default function Studio({
           ))}
         </select>
 
-        <button className="compile" onClick={() => compile({ fast: false, reset: true })} disabled={busy} title="Full build (resolves all references)">
-          {busy ? "Compiling…" : "Compile"}
-        </button>
+        <Btn className="compile" busy={busy} onClick={() => { compile({ fast: false, reset: true }); }} title="Full build (resolves all references)">
+          Compile
+        </Btn>
 
         {persistent && (
-          <button className="save-btn" onClick={save} disabled={saving} title="Save to your Drive (⌘S)">
-            {saving ? "Saving…" : dirty ? "Save" : "Saved"}
-          </button>
+          <Btn className="save-btn" busy={saving} onClick={() => { save(); }} title="Save to your Drive (⌘S)">
+            {dirty ? "Save" : "Saved"}
+          </Btn>
         )}
 
         <label className="toggle">
@@ -326,12 +327,12 @@ export default function Studio({
           </span>
         )}
         {persistent && plan !== "premium" && onUpgrade && (
-          <button className="ghost" onClick={onUpgrade}>Upgrade</button>
+          <Btn className="ghost" onClick={onUpgrade}>Upgrade</Btn>
         )}
 
-        <button className="ghost" onClick={() => download("mks")} title="Download .mks source">.mks</button>
-        <button className="ghost" onClick={() => download("tex")} disabled={!tex} title="Download generated LaTeX">.tex</button>
-        <button className="ghost" onClick={() => download("pdf")} disabled={!pdfData} title="Download PDF">.pdf</button>
+        <Btn className="ghost" onClick={() => download("mks")} title="Download .mks source">.mks</Btn>
+        <Btn className="ghost" onClick={() => download("tex")} disabled={!tex} title="Download generated LaTeX">.tex</Btn>
+        <Btn className="ghost" onClick={() => download("pdf")} disabled={!pdfData} title="Download PDF">.pdf</Btn>
 
         <div className="status">
           {busy ? (

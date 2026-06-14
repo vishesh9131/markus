@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { SignOutButton } from "../../components/AuthButtons";
 import Loader from "../../components/Loader";
 import GrantDrive from "../../components/GrantDrive";
+import { Btn, LinkBtn } from "../../components/Btn";
 import { useDialog } from "../../components/Dialog";
 import { runUpgrade, redeemPromo } from "../../lib/upgrade";
 
@@ -147,12 +148,12 @@ export default function Dashboard() {
         </span>
         {free && (
           <>
-            <button className="ghost-btn" onClick={redeem} disabled={busy}>
+            <Btn className="ghost-btn" busy={busy} onClick={() => { redeem(); }}>
               Redeem code
-            </button>
-            <button className="ghost-btn" onClick={upgrade} disabled={busy}>
+            </Btn>
+            <Btn className="ghost-btn" busy={busy} onClick={() => { upgrade(); }}>
               Upgrade ₹9
-            </button>
+            </Btn>
           </>
         )}
         <Link className="dash-user" href="/studio/account" title="Account">{user.email}</Link>
@@ -168,9 +169,9 @@ export default function Dashboard() {
               {free && ` Free plan: ${workspaces.length}/${limits.workspaces} workspaces.`}
             </p>
           </div>
-          <button className="cta" onClick={createWorkspace} disabled={creating || atLimit} title={atLimit ? "Free limit reached — upgrade for unlimited" : "New workspace"}>
-            {creating ? "Creating…" : "+ New workspace"}
-          </button>
+          <Btn className="cta" busy={creating} disabled={atLimit} onClick={() => { createWorkspace(); }} title={atLimit ? "Free limit reached — upgrade for unlimited" : "New workspace"}>
+            + New workspace
+          </Btn>
         </div>
 
         {workspaces.length === 0 ? (
@@ -193,8 +194,8 @@ export default function Dashboard() {
                   </ul>
                 </Link>
                 <div className="ws-card-foot">
-                  <Link className="ghost-btn sm" href={`/studio/${ws.id}`}>Open</Link>
-                  <button className="ghost-btn sm danger" onClick={() => remove(ws.id, ws.name)}>Delete</button>
+                  <LinkBtn className="ghost-btn sm" href={`/studio/${ws.id}`}>Open</LinkBtn>
+                  <Btn className="ghost-btn sm danger" onClick={() => remove(ws.id, ws.name)}>Delete</Btn>
                 </div>
               </div>
             ))}

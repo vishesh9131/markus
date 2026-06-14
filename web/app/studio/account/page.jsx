@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { SignOutButton } from "../../../components/AuthButtons";
 import Loader from "../../../components/Loader";
+import { Btn } from "../../../components/Btn";
 import GrantDrive from "../../../components/GrantDrive";
 import { useDialog } from "../../../components/Dialog";
 import { runUpgrade, redeemPromo } from "../../../lib/upgrade";
@@ -119,7 +120,7 @@ export default function AccountPage() {
                 <p className="acct-big">Premium</p>
                 <p className="acct-sub">{renews ? `Active until ${renews}` : "Active"} · unlimited workspaces, documents &amp; pages.</p>
                 <div className="acct-actions">
-                  <button className="ghost-btn" onClick={redeem}>Apply another code</button>
+                  <Btn className="ghost-btn" busy={busy} onClick={() => { redeem(); }}>Apply another code</Btn>
                 </div>
               </>
             ) : (
@@ -129,8 +130,8 @@ export default function AccountPage() {
                   {limits.workspaces} workspaces · {limits.docsPerWorkspace} docs each · up to {limits.pagesPerDoc} pages.
                 </p>
                 <div className="acct-actions">
-                  <button className="cta" onClick={upgrade}>Upgrade — ₹9 / 2 months</button>
-                  <button className="ghost-btn" onClick={redeem}>Redeem code</button>
+                  <Btn className="cta" busy={busy} onClick={() => { upgrade(); }}>Upgrade — ₹9 / 2 months</Btn>
+                  <Btn className="ghost-btn" busy={busy} onClick={() => { redeem(); }}>Redeem code</Btn>
                 </div>
               </>
             )}

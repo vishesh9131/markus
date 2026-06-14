@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth, AUTH_MODE } from "../auth";
 import { PREMIUM, FREE_LIMITS } from "../lib/quota";
 import { SignInButton } from "../components/AuthButtons";
+import { LinkBtn } from "../components/Btn";
 import HeroPaper from "../components/HeroPaper";
 import ThemeToggle from "../components/ThemeToggle";
 
@@ -30,7 +31,7 @@ export default async function Landing() {
                   (session.user.name || session.user.email || "?").trim().charAt(0).toUpperCase()
                 )}
               </Link>
-              <Link className="cta sm" href="/studio">Open Studio</Link>
+              <LinkBtn className="cta sm" href="/studio">Open Studio</LinkBtn>
             </>
           ) : (
             <SignInButton mode={AUTH_MODE} className="cta sm">
@@ -55,7 +56,7 @@ export default async function Landing() {
           </p>
           <div className="lp-actions">
             {signedIn ? (
-              <Link className="cta" href="/studio">Open Studio →</Link>
+              <LinkBtn className="cta" href="/studio">Open Studio →</LinkBtn>
             ) : (
               <SignInButton mode={AUTH_MODE} className="cta" />
             )}
@@ -102,7 +103,7 @@ export default async function Landing() {
               <li>All templates &amp; live preview</li>
             </ul>
             {signedIn ? (
-              <Link className="ghost-btn wide" href="/studio">Open Studio</Link>
+              <LinkBtn className="ghost-btn wide" href="/studio">Open Studio</LinkBtn>
             ) : (
               <SignInButton mode={AUTH_MODE} className="ghost-btn wide">Get started</SignInButton>
             )}

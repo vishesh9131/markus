@@ -5,6 +5,7 @@ import { use, useCallback, useEffect, useState } from "react";
 import Studio from "../../../components/Studio";
 import Loader from "../../../components/Loader";
 import GrantDrive from "../../../components/GrantDrive";
+import { Btn } from "../../../components/Btn";
 import { useDialog } from "../../../components/Dialog";
 import { runUpgrade } from "../../../lib/upgrade";
 
@@ -145,7 +146,7 @@ export default function WorkspaceEditor({ params }) {
               {free ? ` · free plan max ${state.limits.docsPerWorkspace} (×5 pages)` : ""}
             </p>
           </div>
-          <button className="cta" onClick={newDoc}>+ New document</button>
+          <Btn className="cta" onClick={newDoc}>+ New document</Btn>
         </div>
 
         {ws.docs.length === 0 ? (
@@ -153,7 +154,7 @@ export default function WorkspaceEditor({ params }) {
         ) : (
           <div className="ws-grid">
             {ws.docs.map((d) => (
-              <button className="ws-card doc-card" key={d.id} onClick={() => openDoc(d.id)}>
+              <Btn className="ws-card doc-card" key={d.id} busy={opening} onClick={() => { openDoc(d.id); }}>
                 <div className="ws-card-body">
                   <h3>{d.name}</h3>
                   <p className="ws-meta">
@@ -162,7 +163,7 @@ export default function WorkspaceEditor({ params }) {
                   </p>
                 </div>
                 <span className="ghost-btn sm">Open editor</span>
-              </button>
+              </Btn>
             ))}
           </div>
         )}
