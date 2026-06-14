@@ -5,6 +5,8 @@ import { use, useCallback, useEffect, useState } from "react";
 import Studio from "../../../components/Studio";
 import Loader from "../../../components/Loader";
 import GrantDrive from "../../../components/GrantDrive";
+import StudioSidebar from "../../../components/StudioSidebar";
+import DocThumb from "../../../components/DocThumb";
 import { Btn } from "../../../components/Btn";
 import { useDialog } from "../../../components/Dialog";
 import { runUpgrade } from "../../../lib/upgrade";
@@ -22,6 +24,25 @@ Start writing here. Inline math like $E = mc^2$, **bold**, and lists:
 - first point
 - second point
 `;
+
+function timeAgo(iso) {
+  const then = Date.parse(iso || "");
+  if (!then) return "recently";
+  const s = Math.max(1, Math.floor((Date.now() - then) / 1000));
+  const units = [
+    ["year", 31536000],
+    ["month", 2592000],
+    ["week", 604800],
+    ["day", 86400],
+    ["hour", 3600],
+    ["minute", 60],
+  ];
+  for (const [name, secs] of units) {
+    const v = Math.floor(s / secs);
+    if (v >= 1) return `${v} ${name}${v > 1 ? "s" : ""} ago`;
+  }
+  return "just now";
+}
 
 export default function WorkspaceEditor({ params }) {
   const { ws: wsId } = use(params);
@@ -145,43 +166,57 @@ export default function WorkspaceEditor({ params }) {
   // document chooser
   const free = account.tier !== "premium";
   return (
-    <div className="dash">
-      <header className="dash-nav">
-        <Link className="brand" href="/studio"><span className="name">Markus</span><span className="tag">studio</span></Link>
-        <div className="spacer" />
-        <span className={`plan-badge ${account.tier}`}>{account.tier === "premium" ? "Premium" : "Free"}</span>
-        <Link className="ghost-btn" href="/studio">← Workspaces</Link>
-      </header>
-      <main className="dash-main">
-        <div className="dash-head">
+    <div className="studio-shell">
+      <StudioSidebar user={state.user} account={account} onUpgrade={upgrade} />
+      <main className="studio-main">
+        <nav className="studio-crumbs">
+          <Link href="/studio">Workspaces</Link>
+          <span aria-hidden="true">/</span>
+          <span className="crumb-current">{ws.name}</span>
+        </nav>
+
+        <div className="studio-head">
           <div>
             <h1>{ws.name}</h1>
-            <p className="dash-sub">
+            <p className="studio-sub">
               {ws.docs.length} {ws.docs.length === 1 ? "document" : "documents"}
-              {free ? ` · free plan max ${state.limits.docsPerWorkspace} (×5 pages)` : ""}
+              {free ? ` · free max ${state.limits.docsPerWorkspace} (×5 pages)` : ""}
             </p>
           </div>
           <Btn className="cta" onClick={newDoc}>+ New document</Btn>
         </div>
 
-        {ws.docs.length === 0 ? (
-          <div className="dash-empty">No documents yet. Create your first <code>.mks</code>.</div>
-        ) : (
-          <div className="ws-grid">
-            {ws.docs.map((d) => (
-              <Btn className="ws-card doc-card" key={d.id} busy={opening} onClick={() => { openDoc(d.id); }}>
-                <div className="ws-card-body">
-                  <h3>{d.name}</h3>
-                  <p className="ws-meta">
-                    {typeof d.pages === "number" ? `${d.pages} ${d.pages === 1 ? "page" : "pages"}` : "—"}
-                    {d.updatedAt ? ` · ${new Date(d.updatedAt).toLocaleDateString()}` : ""}
-                  </p>
-                </div>
-                <span className="ghost-btn sm">Open editor</span>
-              </Btn>
-            ))}
-          </div>
-        )}
+        <div className="file-grid">
+          {ws.docs.map((d) => (
+            <button className="file-card" key={d.id} onClick={() => openDoc(d.id)} title={`Open ${d.name}`}>
+              <div className="file-card-thumb">
+                <DocThumb name={d.name} />
+              </div>
+              <div className="file-card-foot">
+                <svg className="file-icon" width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M4 1.6h5L12.4 5v9.4c0 .3-.2.5-.5.5H4a.5.5 0 0 1-.5-.5V2.1c0-.3.2-.5.5-.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                  <path d="M8.8 1.8V5h3.2" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                </svg>
+                <span className="file-card-info">
+                  <span className="file-name">{d.name}</span>
+                  <span className="file-meta">
+                    {typeof d.pages === "number" ? `${d.pages}p · ` : ""}
+                    {d.updatedAt ? `Edited ${timeAgo(d.updatedAt)}` : "—"}
+                  </span>
+                </span>
+              </div>
+            </button>
+          ))}
+
+          <button className="file-card add-file" onClick={newDoc}>
+            <div className="file-card-thumb add">
+              <span className="add-plus">+</span>
+            </div>
+            <div className="file-card-foot">
+              <span className="file-name">New document</span>
+            </div>
+          </button>
+        </div>
       </main>
       {opening && <Loader overlay label="Opening document…" />}
     </div>

@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { SignOutButton } from "../../components/AuthButtons";
 import Loader from "../../components/Loader";
 import GrantDrive from "../../components/GrantDrive";
-import { Btn, LinkBtn } from "../../components/Btn";
+import StudioSidebar from "../../components/StudioSidebar";
+import DocThumb from "../../components/DocThumb";
+import { Btn } from "../../components/Btn";
 import { useDialog } from "../../components/Dialog";
 import { runUpgrade, redeemPromo } from "../../lib/upgrade";
+import { PREMIUM } from "../../lib/quota";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -34,7 +36,6 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    // theme from storage
     const t = localStorage.getItem("markus-studio-theme");
     if (t) document.documentElement.dataset.theme = t;
     load();
@@ -135,89 +136,65 @@ export default function Dashboard() {
   const atLimit = free && workspaces.length >= limits.workspaces;
 
   return (
-    <div className="dash">
+    <div className="studio-shell">
       {(busy || creating) && <Loader overlay label={creating ? "Creating workspace…" : "One moment…"} />}
-      <header className="dash-nav">
-        <Link className="brand" href="/">
-          <span className="name">Markus</span>
-          <span className="tag">studio</span>
-        </Link>
-        <div className="spacer" />
-        <span className={`plan-badge ${account.tier}`}>
-          {account.tier === "premium" ? "Premium" : "Free"}
-        </span>
-        {free && (
-          <>
-            <Btn className="ghost-btn" busy={busy} onClick={() => { redeem(); }}>
-              Redeem code
-            </Btn>
-            <Btn className="ghost-btn" busy={busy} onClick={() => { upgrade(); }}>
-              Upgrade ₹9
-            </Btn>
-          </>
-        )}
-        <Link className="lp-account" href="/studio/account" title={`${user.email} · Account`}>
-          {user.image ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={user.image} alt="Account" referrerPolicy="no-referrer" />
-          ) : (
-            (user.name || user.email || "?").trim().charAt(0).toUpperCase()
-          )}
-        </Link>
-        <SignOutButton />
-      </header>
+      <StudioSidebar user={user} account={account} onUpgrade={upgrade} onRedeem={redeem} />
 
-      <main className="dash-main">
-        <div className="dash-head">
+      <main className="studio-main">
+        <div className="studio-head">
           <div>
             <h1>Your workspaces</h1>
-            <p className="dash-sub">
-              {backend === "drive" ? "Saved to your Google Drive." : "Demo mode — saved locally on this machine."}
-              {free && ` Free plan: ${workspaces.length}/${limits.workspaces} workspaces.`}
+            <p className="studio-sub">
+              {backend === "drive" ? "Saved to your Google Drive." : "Demo mode — saved locally."}
+              {free && ` · ${workspaces.length}/${limits.workspaces} used`}
             </p>
           </div>
-          <Btn className="cta" busy={creating} disabled={atLimit} onClick={() => { createWorkspace(); }} title={atLimit ? "Free limit reached — upgrade for unlimited" : "New workspace"}>
+          <Btn
+            className="cta"
+            busy={creating}
+            disabled={atLimit}
+            onClick={() => { createWorkspace(); }}
+            title={atLimit ? "Free limit reached — upgrade for unlimited" : "New workspace"}
+          >
             + New workspace
           </Btn>
         </div>
 
-        {workspaces.length === 0 ? (
-          <div className="dash-empty">No workspaces yet. Create your first one to start writing.</div>
-        ) : (
-          <div className="ws-grid">
-            {workspaces.map((ws) => (
-              <div className="ws-card" key={ws.id}>
-                <Link href={`/studio/${ws.id}`} className="ws-card-body">
-                  <h3>{ws.name}</h3>
-                  <p className="ws-meta">
+        <div className="ws-cards">
+          {workspaces.map((ws) => (
+            <div className="ws-tile" key={ws.id}>
+              <Link href={`/studio/${ws.id}`} className="ws-tile-thumbs" aria-label={ws.name}>
+                <div className="ws-thumb-grid">
+                  {ws.docs.slice(0, 4).map((d) => <DocThumb key={d.id} name={d.name} mini />)}
+                  {Array.from({ length: Math.max(0, 4 - ws.docs.length) }).map((_, i) => (
+                    <div className="doc-thumb empty" key={`e${i}`} aria-hidden="true" />
+                  ))}
+                </div>
+              </Link>
+              <div className="ws-tile-foot">
+                <Link href={`/studio/${ws.id}`} className="ws-tile-info">
+                  <span className="ws-tile-name">{ws.name}</span>
+                  <span className="ws-tile-meta">
                     {ws.docs.length} {ws.docs.length === 1 ? "document" : "documents"}
-                    {free ? ` · max ${limits.docsPerWorkspace}` : ""}
-                  </p>
-                  <ul className="ws-docs">
-                    {ws.docs.slice(0, 3).map((d) => (
-                      <li key={d.id}>{d.name}{typeof d.pages === "number" ? ` · ${d.pages}p` : ""}</li>
-                    ))}
-                    {ws.docs.length === 0 && <li className="muted">empty</li>}
-                  </ul>
+                  </span>
                 </Link>
-                <div className="ws-card-foot">
-                  <LinkBtn className="ghost-btn sm" href={`/studio/${ws.id}`}>Open</LinkBtn>
-                  <Btn className="ghost-btn sm danger" onClick={() => remove(ws.id, ws.name)}>Delete</Btn>
-                </div>
+                <button className="icon-del" title="Delete workspace" onClick={() => remove(ws.id, ws.name)}>
+                  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M3 4.5h10M6.5 4.5V3.2c0-.4.3-.7.7-.7h1.6c.4 0 .7.3.7.7v1.3M4.3 4.5l.5 8c0 .5.4.9.9.9h4.6c.5 0 .9-.4.9-.9l.5-8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
               </div>
-            ))}
+            </div>
+          ))}
 
+          <button className="ws-tile add-tile" onClick={atLimit ? upgrade : createWorkspace}>
+            <span className="add-plus">+</span>
+            <span className="add-text">{atLimit ? "Upgrade to create more" : "New workspace"}</span>
             {atLimit && (
-              <button className="ws-card upgrade-card" onClick={upgrade}>
-                <div>
-                  <h3>Need more?</h3>
-                  <p>Go Premium for unlimited workspaces, documents and pages — ₹9 / 2 months.</p>
-                  <span className="cta sm">Upgrade</span>
-                </div>
-              </button>
+              <span className="add-sub">Unlimited on Premium · ₹{PREMIUM.rupees} / {PREMIUM.months} mo</span>
             )}
-          </div>
-        )}
+          </button>
+        </div>
       </main>
     </div>
   );
