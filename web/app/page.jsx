@@ -5,6 +5,7 @@ import { SignInButton } from "../components/AuthButtons";
 import { LinkBtn } from "../components/Btn";
 import HeroPaper from "../components/HeroPaper";
 import ThemeToggle from "../components/ThemeToggle";
+import SiteFooter from "../components/SiteFooter";
 
 export default async function Landing() {
   const session = await auth();
@@ -132,10 +133,7 @@ export default async function Landing() {
         </div>
       </section>
 
-      <footer className="lp-footer">
-        <span>Markus — write less markup, get more done.</span>
-        <a href="https://github.com/vishesh9131/markus" target="_blank" rel="noreferrer">GitHub</a>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
