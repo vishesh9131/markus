@@ -26,6 +26,22 @@ export async function grantPremium(store, months) {
   return until;
 }
 
+// Redeem a promo code at most once per account, so the same code can't be
+// stacked for unlimited free premium. Returns { already: true } if this account
+// has used this code before, else { until } after granting `months`.
+export async function redeemPromoOnce(store, code, months) {
+  const a = (await store.readAccount()) || {};
+  const used = Array.isArray(a.promosUsed) ? a.promosUsed : [];
+  if (used.includes(code)) return { already: true };
+  const base =
+    a.premiumUntil && Date.parse(a.premiumUntil) > Date.now()
+      ? Date.parse(a.premiumUntil)
+      : Date.now();
+  const until = new Date(base + months * 30 * 24 * 3600 * 1000).toISOString();
+  await store.writeAccount({ ...a, premiumUntil: until, promosUsed: [...used, code] });
+  return { until };
+}
+
 // Apply any webhook-recorded payments (see lib/ledger) to the user's account.
 // The webhook can't reach the user's Drive, so it parks payments by email; here
 // — with the user's session/Drive token available — we grant and mark claimed.

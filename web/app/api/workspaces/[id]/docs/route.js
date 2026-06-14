@@ -36,19 +36,20 @@ export async function POST(request, { params }) {
         { status: 402 }
       );
     }
-    if (typeof pages === "number" && pages > limits.pagesPerDoc) {
-      return Response.json(
-        {
-          ok: false,
-          code: "PAGE_LIMIT",
-          error: `Free plan caps documents at ${limits.pagesPerDoc} pages (this one is ${pages}). Upgrade for unlimited.`,
-        },
-        { status: 402 }
-      );
-    }
+    // The page cap is advisory: never reject the save (that would throw away the
+    // user's writing). We persist the content and just flag when it's over the
+    // free limit so the UI can nag toward upgrading.
+    const overLimit =
+      typeof pages === "number" &&
+      Number.isFinite(limits.pagesPerDoc) &&
+      pages > limits.pagesPerDoc;
 
     const doc = await store.saveDoc(wsId, { id, name, content, pages });
-    return Response.json({ ok: true, doc });
+    return Response.json({
+      ok: true,
+      doc,
+      ...(overLimit ? { overLimit: true, pageLimit: limits.pagesPerDoc } : {}),
+    });
   } catch (e) {
     return errorResponse(e);
   }

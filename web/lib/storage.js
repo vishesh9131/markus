@@ -153,20 +153,38 @@ class DriveStore {
     return this._root;
   }
 
+  // List every file matching params, following nextPageToken so results aren't
+  // capped at Drive's default page size (premium users can exceed 100).
+  async _listAll({ fields = "files(id,name)", ...params }) {
+    const out = [];
+    let pageToken;
+    do {
+      const res = await this.drive.files.list({
+        ...params,
+        pageSize: 1000,
+        pageToken,
+        fields: `nextPageToken, ${fields}`,
+      });
+      out.push(...(res.data.files || []));
+      pageToken = res.data.nextPageToken;
+    } while (pageToken);
+    return out;
+  }
+
   async listWorkspaces() {
     const root = await this._rootId();
-    const folders = await this.drive.files.list({
+    const folders = await this._listAll({
       q: `'${root}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
       fields: "files(id,name,createdTime)",
       orderBy: "createdTime",
     });
     const out = [];
-    for (const f of folders.data.files || []) {
-      const files = await this.drive.files.list({
+    for (const f of folders) {
+      const files = await this._listAll({
         q: `'${f.id}' in parents and trashed=false`,
         fields: "files(id,name,modifiedTime,appProperties)",
       });
-      const docs = (files.data.files || []).map((d) => ({
+      const docs = files.map((d) => ({
         id: d.id,
         name: d.name,
         pages: d.appProperties?.pages ? Number(d.appProperties.pages) : undefined,
