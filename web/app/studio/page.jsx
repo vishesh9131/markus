@@ -7,10 +7,22 @@ import Loader from "../../components/Loader";
 import GrantDrive from "../../components/GrantDrive";
 import StudioSidebar from "../../components/StudioSidebar";
 import DocThumb from "../../components/DocThumb";
+import ViewToolbar from "../../components/ViewToolbar";
 import { Btn } from "../../components/Btn";
 import { useDialog } from "../../components/Dialog";
+import { useViewPrefs } from "../../lib/useViewPrefs";
 import { runUpgrade, redeemPromo } from "../../lib/upgrade";
 import { PREMIUM } from "../../lib/quota";
+
+const WS_SORTS = [
+  { value: "modified", label: "Last modified" },
+  { value: "created", label: "Date created" },
+  { value: "name", label: "Name (A–Z)" },
+];
+function wsActivity(ws) {
+  const times = (ws.docs || []).map((d) => Date.parse(d.updatedAt || "") || 0);
+  return times.length ? Math.max(...times) : Date.parse(ws.createdAt || "") || 0;
+}
 
 export default function Dashboard() {
   const router = useRouter();
@@ -19,6 +31,7 @@ export default function Dashboard() {
   const [error, setError] = useState(null);
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { view, setView, sort, setSort } = useViewPrefs({ sortKey: "markus-sort-ws", defaultSort: "modified" });
 
   const load = useCallback(async () => {
     try {
@@ -134,6 +147,11 @@ export default function Dashboard() {
   const { user, account, limits, workspaces, backend } = data;
   const free = account.tier !== "premium";
   const atLimit = free && workspaces.length >= limits.workspaces;
+  const sortedWorkspaces = [...workspaces].sort((a, b) => {
+    if (sort === "name") return a.name.localeCompare(b.name);
+    if (sort === "created") return (Date.parse(b.createdAt || "") || 0) - (Date.parse(a.createdAt || "") || 0);
+    return wsActivity(b) - wsActivity(a);
+  });
 
   return (
     <div className="studio-shell">
@@ -160,8 +178,12 @@ export default function Dashboard() {
           </Btn>
         </div>
 
-        <div className="ws-cards">
-          {workspaces.map((ws) => (
+        {workspaces.length > 0 && (
+          <ViewToolbar view={view} onView={setView} sort={sort} onSort={setSort} sorts={WS_SORTS} />
+        )}
+
+        <div className={`ws-cards view-${view}`}>
+          {sortedWorkspaces.map((ws) => (
             <div className="ws-tile" key={ws.id}>
               <Link href={`/studio/${ws.id}`} className="ws-tile-thumbs" aria-label={ws.name}>
                 <div className="ws-thumb-grid">

@@ -7,9 +7,17 @@ import Loader from "../../../components/Loader";
 import GrantDrive from "../../../components/GrantDrive";
 import StudioSidebar from "../../../components/StudioSidebar";
 import DocThumb from "../../../components/DocThumb";
+import ViewToolbar from "../../../components/ViewToolbar";
 import { Btn } from "../../../components/Btn";
 import { useDialog } from "../../../components/Dialog";
+import { useViewPrefs } from "../../../lib/useViewPrefs";
 import { runUpgrade } from "../../../lib/upgrade";
+
+const DOC_SORTS = [
+  { value: "modified", label: "Last modified" },
+  { value: "name", label: "Name (A–Z)" },
+  { value: "pages", label: "Pages" },
+];
 
 const STARTER = `---
 title: "Untitled"
@@ -50,6 +58,7 @@ export default function WorkspaceEditor({ params }) {
   const [state, setState] = useState({ status: "loading" });
   const [active, setActive] = useState(null); // {id, name, content}
   const [opening, setOpening] = useState(false);
+  const { view, setView, sort, setSort } = useViewPrefs({ sortKey: "markus-sort-docs", defaultSort: "modified" });
 
   const load = useCallback(async () => {
     try {
@@ -165,6 +174,11 @@ export default function WorkspaceEditor({ params }) {
 
   // document chooser
   const free = account.tier !== "premium";
+  const sortedDocs = [...ws.docs].sort((a, b) => {
+    if (sort === "name") return a.name.localeCompare(b.name);
+    if (sort === "pages") return (b.pages || 0) - (a.pages || 0);
+    return (Date.parse(b.updatedAt || "") || 0) - (Date.parse(a.updatedAt || "") || 0);
+  });
   return (
     <div className="studio-shell">
       <StudioSidebar user={state.user} account={account} onUpgrade={upgrade} />
@@ -186,8 +200,12 @@ export default function WorkspaceEditor({ params }) {
           <Btn className="cta" onClick={newDoc}>+ New document</Btn>
         </div>
 
-        <div className="file-grid">
-          {ws.docs.map((d) => (
+        {ws.docs.length > 0 && (
+          <ViewToolbar view={view} onView={setView} sort={sort} onSort={setSort} sorts={DOC_SORTS} />
+        )}
+
+        <div className={`file-grid view-${view}`}>
+          {sortedDocs.map((d) => (
             <button className="file-card" key={d.id} onClick={() => openDoc(d.id)} title={`Open ${d.name}`}>
               <div className="file-card-thumb">
                 <DocThumb name={d.name} />
