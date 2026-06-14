@@ -3,6 +3,7 @@ import { auth } from "../../../../auth";
 import { grantPremium, getAccount } from "../../../../lib/accounts";
 import { getStore } from "../../../../lib/storage";
 import { PREMIUM } from "../../../../lib/quota";
+import { limit } from "../../../../lib/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,9 @@ export const dynamic = "force-dynamic";
 export async function POST(request) {
   const session = await auth();
   if (!session?.user) return Response.json({ ok: false, error: "Not signed in" }, { status: 401 });
+
+  const rl = limit("billing-verify", session.user.email, { max: 20, windowMs: 60_000 });
+  if (rl) return rl;
 
   const body = await request.json().catch(() => ({}));
   const keySecret = process.env.RAZORPAY_KEY_SECRET;

@@ -1,6 +1,7 @@
 import { auth } from "../../../../auth";
 import { getStore } from "../../../../lib/storage";
 import { errorResponse, guard } from "../../../../lib/apiError";
+import { limit } from "../../../../lib/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +26,8 @@ export async function DELETE(_req, { params }) {
   const session = await auth();
   const bad = guard(session);
   if (bad) return bad;
+  const rl = limit("ws-delete", session.user.email, { max: 30, windowMs: 60_000 });
+  if (rl) return rl;
   try {
     const { id } = await params;
     const store = getStore(session);

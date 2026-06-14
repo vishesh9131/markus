@@ -2,6 +2,7 @@ import { auth } from "../../../auth";
 import { getStore } from "../../../lib/storage";
 import { clearLedger } from "../../../lib/ledger";
 import { errorResponse, guard } from "../../../lib/apiError";
+import { limit } from "../../../lib/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,8 @@ export async function DELETE() {
   const session = await auth();
   const bad = guard(session);
   if (bad) return bad;
+  const rl = limit("account-delete", session.user.email, { max: 10, windowMs: 60_000 });
+  if (rl) return rl;
   try {
     const store = getStore(session);
     await store.deleteEverything();

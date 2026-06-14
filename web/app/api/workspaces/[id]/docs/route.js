@@ -3,6 +3,7 @@ import { getStore } from "../../../../../lib/storage";
 import { getAccount } from "../../../../../lib/accounts";
 import { limitsFor } from "../../../../../lib/quota";
 import { errorResponse, guard } from "../../../../../lib/apiError";
+import { limit } from "../../../../../lib/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,10 @@ export async function POST(request, { params }) {
   const session = await auth();
   const bad = guard(session);
   if (bad) return bad;
+  // High ceiling: autosave is frequent and a 429 here must never cost a user
+  // their writing. This only catches a runaway/abusive client.
+  const rl = limit("doc-save", session.user.email, { max: 240, windowMs: 60_000 });
+  if (rl) return rl;
   try {
     const { id: wsId } = await params;
     const store = getStore(session);

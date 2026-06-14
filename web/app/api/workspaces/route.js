@@ -3,6 +3,7 @@ import { getStore } from "../../../lib/storage";
 import { getAccount, reconcilePending } from "../../../lib/accounts";
 import { limitsFor } from "../../../lib/quota";
 import { errorResponse, guard } from "../../../lib/apiError";
+import { limit } from "../../../lib/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +36,8 @@ export async function POST(request) {
   const session = await auth();
   const bad = guard(session);
   if (bad) return bad;
+  const rl = limit("ws-create", session.user.email, { max: 30, windowMs: 60_000 });
+  if (rl) return rl;
   try {
     const store = getStore(session);
     const account = await getAccount(store, session.user.email);

@@ -1,5 +1,6 @@
 import { auth } from "../../../../auth";
 import { PREMIUM } from "../../../../lib/quota";
+import { limit } from "../../../../lib/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,6 +10,9 @@ export const dynamic = "force-dynamic";
 export async function POST() {
   const session = await auth();
   if (!session?.user) return Response.json({ ok: false, error: "Not signed in" }, { status: 401 });
+
+  const rl = limit("billing-order", session.user.email, { max: 10, windowMs: 60_000 });
+  if (rl) return rl;
 
   const keyId = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
