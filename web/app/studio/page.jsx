@@ -156,7 +156,14 @@ export default function Dashboard() {
             </Btn>
           </>
         )}
-        <Link className="dash-user" href="/studio/account" title="Account">{user.email}</Link>
+        <Link className="lp-account" href="/studio/account" title={`${user.email} · Account`}>
+          {user.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={user.image} alt="Account" referrerPolicy="no-referrer" />
+          ) : (
+            (user.name || user.email || "?").trim().charAt(0).toUpperCase()
+          )}
+        </Link>
         <SignOutButton />
       </header>
 
