@@ -117,6 +117,11 @@ class LocalStore {
     await fs.mkdir(this.dir, { recursive: true });
     await fs.writeFile(path.join(this.dir, "account.json"), JSON.stringify(obj, null, 2));
   }
+
+  // Remove every workspace, document, and the account file for this user.
+  async deleteEverything() {
+    await fs.rm(this.dir, { recursive: true, force: true });
+  }
 }
 
 // ---------------- Google Drive backend ----------------
@@ -262,5 +267,18 @@ class DriveStore {
         media,
       });
     }
+  }
+
+  // Delete the whole "Markus Studio" folder, which cascades to every workspace,
+  // document, and the account file. Only files this app created are affected.
+  async deleteEverything() {
+    const q =
+      `name='${ROOT_FOLDER}' and mimeType='application/vnd.google-apps.folder' ` +
+      `and 'root' in parents and trashed=false`;
+    const res = await this.drive.files.list({ q, fields: "files(id)", spaces: "drive" });
+    for (const f of res.data.files || []) {
+      await this.drive.files.delete({ fileId: f.id });
+    }
+    this._root = null;
   }
 }

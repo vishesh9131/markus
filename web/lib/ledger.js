@@ -83,3 +83,18 @@ export async function markClaimed(email, paymentId) {
   rec.claimed = Array.from(new Set([...(rec.claimed || []), paymentId]));
   await writeRecord(email, rec);
 }
+
+// Remove this email's billing record entirely (used on account deletion).
+// Best-effort: never throws.
+export async function clearLedger(email) {
+  try {
+    const store = await blobStore();
+    if (store) {
+      await store.delete(email);
+      return;
+    }
+    await fs.rm(diskPath(email), { force: true });
+  } catch {
+    /* best-effort */
+  }
+}

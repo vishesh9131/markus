@@ -13,6 +13,7 @@ import { exportPdfWithPreference } from "../lib/pdfExport";
 const PdfViewer = dynamic(() => import("./PdfViewer"), { ssr: false });
 
 const DEBOUNCE_MS = 350;
+const AUTOSAVE_MS = 1200;
 const STORAGE_KEY = "markus-studio-doc";
 // when the compiler runs on a separate host (e.g. Render), point the browser at
 // it directly; empty string = same-origin (single-host / local dev)
@@ -85,6 +86,8 @@ export default function Studio({
   const dragging = useRef(false);
   const sessionRef = useRef(null);
   const pagesRef = useRef(0);
+  const dirtyRef = useRef(false);
+  const saveRef = useRef(null);
 
   useEffect(() => {
     const start =
@@ -174,7 +177,7 @@ export default function Studio({
     (value) => {
       setSource(value);
       sourceRef.current = value;
-      if (persistent) setDirty(true);
+      if (persistent) { setDirty(true); dirtyRef.current = true; }
       else window.localStorage.setItem(STORAGE_KEY, value);
       if (!auto) return;
       clearTimeout(timer.current);
@@ -185,11 +188,16 @@ export default function Studio({
 
   const save = useCallback(async () => {
     if (!onSaveDoc || saving) return;
+    const snapshot = sourceRef.current;
     setSaving(true);
     try {
-      await onSaveDoc({ content: sourceRef.current, pages: pagesRef.current });
+      await onSaveDoc({ content: snapshot, pages: pagesRef.current });
       setSavedAt(Date.now());
-      setDirty(false);
+      // only mark clean if nothing was typed while the save was in flight
+      if (sourceRef.current === snapshot) {
+        setDirty(false);
+        dirtyRef.current = false;
+      }
     } catch (e) {
       setError(String(e.message || e));
     } finally {
@@ -210,12 +218,45 @@ export default function Studio({
     return () => window.removeEventListener("keydown", onKey);
   }, [persistent, save]);
 
+  // keep a ref to the latest save() for debounced timers and unmount cleanup
+  useEffect(() => {
+    saveRef.current = save;
+  }, [save]);
+
+  // autosave: persist to the backend shortly after the user stops typing
+  useEffect(() => {
+    if (!persistent || !dirty || saving) return;
+    const t = setTimeout(() => saveRef.current?.(), AUTOSAVE_MS);
+    return () => clearTimeout(t);
+  }, [persistent, dirty, saving, source]);
+
+  // flush a pending save when leaving the editor (e.g. clicking "back")
+  useEffect(() => {
+    if (!persistent) return;
+    return () => {
+      if (dirtyRef.current) saveRef.current?.();
+    };
+  }, [persistent]);
+
+  // warn before closing the tab with unsaved edits
+  useEffect(() => {
+    if (!persistent) return;
+    const onBeforeUnload = (e) => {
+      if (dirtyRef.current) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [persistent]);
+
   const loadExample = (name) => {
     setExample(name);
     const doc = EXAMPLES[name];
     setSource(doc);
     sourceRef.current = doc;
-    if (persistent) setDirty(true);
+    if (persistent) { setDirty(true); dirtyRef.current = true; }
     else window.localStorage.setItem(STORAGE_KEY, doc);
     compile({ fast: true, reset: true });
   };
@@ -309,8 +350,8 @@ export default function Studio({
         </Btn>
 
         {persistent && (
-          <Btn className="save-btn" busy={saving} onClick={() => { save(); }} title="Save to your Drive (⌘S)">
-            {dirty ? "Save" : "Saved"}
+          <Btn className="save-btn" busy={saving} onClick={() => { save(); }} title="Saves automatically · ⌘S to save now">
+            {saving ? "Saving…" : dirty ? "Save" : "Saved"}
           </Btn>
         )}
 

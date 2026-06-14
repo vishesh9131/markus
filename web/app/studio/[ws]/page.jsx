@@ -81,7 +81,22 @@ export default function WorkspaceEditor({ params }) {
     const name = (raw || "").trim();
     if (!name) return;
     const docName = name.endsWith(".mks") ? name : `${name}.mks`;
-    setActive({ id: null, name: docName, content: STARTER });
+    // Persist the document immediately so it survives navigation even before the
+    // first edit — otherwise a brand-new doc lives only in memory and is lost.
+    setOpening(true);
+    try {
+      const res = await fetch(`/api/workspaces/${wsId}/docs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: docName, content: STARTER, pages: 0 }),
+      }).then((r) => r.json());
+      if (!res.ok) return dialog.alert(res.error || "Couldn’t create the document.", { title: "New document" });
+      setActive({ id: res.doc.id, name: res.doc.name, content: STARTER });
+    } catch {
+      dialog.alert("Network error — please try again.", { title: "New document" });
+    } finally {
+      setOpening(false);
+    }
   };
 
   const saveDoc = useCallback(

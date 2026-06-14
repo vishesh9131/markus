@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { signOut } from "next-auth/react";
 import { SignOutButton } from "../../../components/AuthButtons";
 import Loader from "../../../components/Loader";
 import { Btn } from "../../../components/Btn";
@@ -68,6 +69,34 @@ export default function AccountPage() {
       setBusy(false);
     }
   }, [load, dialog]);
+
+  const removeAccount = useCallback(async () => {
+    const typed = await dialog.prompt(
+      "This permanently deletes your account and every document in your “Markus Studio” Drive folder. This cannot be undone.\n\nType VISHESH to confirm.",
+      { title: "Delete account", placeholder: "VISHESH", okText: "Delete account", danger: true }
+    );
+    if (typed == null) return; // cancelled
+    if (typed.trim() !== "VISHESH") {
+      dialog.alert("That didn’t match — your account was not deleted.", { title: "Delete account" });
+      return;
+    }
+    try {
+      setBusy(true);
+      const res = await fetch("/api/account", { method: "DELETE" })
+        .then((r) => r.json())
+        .catch(() => ({ ok: false }));
+      if (!res.ok) {
+        setBusy(false);
+        dialog.alert(res.error || "Couldn’t delete the account. Please try again.", { title: "Delete account" });
+        return;
+      }
+      await dialog.alert("Your account and all documents have been deleted.", { title: "Account deleted" });
+      signOut({ callbackUrl: "/" });
+    } catch {
+      setBusy(false);
+      dialog.alert("Network error — please try again.", { title: "Delete account" });
+    }
+  }, [dialog]);
 
   if (error === "DRIVE_SCOPE") return <div className="dash"><GrantDrive /></div>;
   if (error === "RELOGIN") return <div className="dash"><GrantDrive reason="relogin" /></div>;
@@ -146,6 +175,19 @@ export default function AccountPage() {
             </ul>
           </section>
         </div>
+
+        <section className="acct-card acct-danger">
+          <h2>Danger zone</h2>
+          <p className="acct-sub">
+            Permanently delete your account and every document in your{" "}
+            {backend === "drive" ? "Google Drive" : "local"} storage. This cannot be undone.
+          </p>
+          <div className="acct-actions">
+            <Btn className="ghost-btn danger" busy={busy} onClick={() => { removeAccount(); }}>
+              Delete account
+            </Btn>
+          </div>
+        </section>
       </main>
     </div>
   );

@@ -631,7 +631,8 @@ html[data-theme="dark"] .topbar select {
 .ghost-btn:hover { border-color: var(--ink-soft); }
 .ghost-btn.sm { padding: 6px 11px; font-size: 12.5px; }
 .ghost-btn.wide { width: 100%; justify-content: center; }
-.ghost-btn.danger:hover { border-color: var(--red); color: var(--red); }
+.ghost-btn.danger { color: var(--red); }
+.ghost-btn.danger:hover { border-color: var(--red); color: var(--red); background: var(--errorbar-bg); }
 .ghost-btn:disabled { opacity: 0.5; cursor: default; }
 
 /* ===================== landing ===================== */
@@ -952,6 +953,8 @@ a.dash-user:hover { color: var(--ink); }
 .acct-big { font-family: var(--serif); font-size: 26px; margin: 0 0 4px; }
 .acct-sub { color: var(--ink-soft); font-size: 13.5px; margin: 0 0 16px; line-height: 1.5; }
 .acct-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.acct-danger { border-color: var(--errorbar-line); }
+.acct-danger h2 { color: var(--red); }
 .acct-stats { list-style: none; padding: 0; margin: 0; }
 .acct-stats li { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .acct-stats li:last-child { border-bottom: none; }
