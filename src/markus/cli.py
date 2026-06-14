@@ -12,11 +12,18 @@ from pathlib import Path
 import click
 
 from markus import __version__
+from markus.ast import BlockQuote, Environment, ListBlock, MermaidBlock
 from markus.check import check_document
 from markus.latex import write_tex
 from markus.parser import MarkusParseError, parse
 from markus.templates_registry import list_templates, resolve_template
-from markus.texpath import find_bibtex, find_latexmk, find_pdflatex, latex_env_for_template
+from markus.texpath import (
+    find_bibtex,
+    find_latexmk,
+    find_mmdc,
+    find_pdflatex,
+    latex_env_for_template,
+)
 
 DEFAULT_TEMPLATE = "article"
 AUX_DIR_NAME = ".markus-aux"
@@ -205,6 +212,56 @@ def _compile_pdf_fast(
         click.secho(f"warning: {w}", fg="yellow", err=True)
 
 
+def _collect_mermaid(blocks) -> list:
+    """All MermaidBlocks in the document, including nested ones."""
+    found = []
+    for b in blocks:
+        if isinstance(b, MermaidBlock):
+            found.append(b)
+        elif isinstance(b, (BlockQuote, Environment)):
+            found.extend(_collect_mermaid(b.blocks))
+        elif isinstance(b, ListBlock):
+            for item in b.items:
+                found.extend(_collect_mermaid(item.children))
+    return found
+
+
+def _render_mermaid(doc, out_dir: Path) -> None:
+    """Render ```mermaid blocks to PDFs via mermaid-cli; set block.image on success.
+
+    Silently leaves block.image=None if mmdc isn't installed — the emitter then
+    falls back to printing the diagram source, so the build never fails.
+    """
+    blocks = _collect_mermaid(doc.blocks)
+    if not blocks:
+        return
+    mmdc = find_mmdc()
+    if not mmdc:
+        return
+    out_dir.mkdir(parents=True, exist_ok=True)
+    # puppeteer needs --no-sandbox in containers/CI
+    cfg = out_dir / ".mmdc-puppeteer.json"
+    try:
+        cfg.write_text('{"args":["--no-sandbox","--disable-gpu"]}', encoding="utf-8")
+    except OSError:
+        cfg = None
+    for idx, blk in enumerate(blocks):
+        src = out_dir / f"markus-mermaid-{idx}.mmd"
+        img = out_dir / f"markus-mermaid-{idx}.pdf"
+        try:
+            src.write_text(blk.code, encoding="utf-8")
+            cmd = [mmdc, "-i", str(src), "-o", str(img), "-b", "transparent"]
+            if cfg:
+                cmd += ["-p", str(cfg)]
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if r.returncode == 0 and img.exists():
+                blk.image = str(img.resolve())
+            else:
+                click.secho("warning: mermaid render failed; showing source", fg="yellow", err=True)
+        except Exception:
+            click.secho("warning: mermaid render error; showing source", fg="yellow", err=True)
+
+
 def _parse_source(source: Path):
     text = source.read_text(encoding="utf-8")
     try:
@@ -256,6 +313,10 @@ def _build_once(source: Path, out_dir: Path | None, template: str | None,
     out.mkdir(parents=True, exist_ok=True)
 
     _print_warnings(check_document(doc, text, source))
+
+    # render mermaid diagrams to images before emitting (skipped for --tex-only)
+    if pdf and not tex_only:
+        _render_mermaid(doc, out)
 
     stem = source.stem
     tex_path = out / f"{stem}.tex"

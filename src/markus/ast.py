@@ -92,6 +92,16 @@ class BlockQuote:
 @dataclass
 class HorizontalRule:
     line: int | None = None
+    color: str | None = None
+
+
+@dataclass
+class MermaidBlock:
+    code: str
+    label: str | None = None
+    caption: str | None = None
+    line: int | None = None
+    image: str | None = None  # set by the CLI after rendering with mermaid-cli
 
 
 @dataclass
@@ -122,6 +132,7 @@ Block = (
     | Table
     | BlockQuote
     | HorizontalRule
+    | MermaidBlock
     | FootnoteDef
     | Environment
 )
@@ -148,6 +159,15 @@ class Emphasis:
 @dataclass
 class Strikeout:
     children: list[Inline]
+
+
+@dataclass
+class Span:
+    """Inline run with a text colour and/or background (highlight)."""
+
+    children: list[Inline]
+    color: str | None = None
+    bg: str | None = None
 
 
 @dataclass
@@ -197,6 +217,7 @@ Inline = (
     | Strong
     | Emphasis
     | Strikeout
+    | Span
     | Code
     | MathInline
     | Cite

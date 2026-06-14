@@ -4,6 +4,7 @@
 FROM node:20-bookworm-slim
 
 # ---- system: Python + LaTeX (latexmk/pdflatex) for compiling .mks -> PDF ----
+# chromium is for mermaid-cli (mmdc), which renders ```mermaid diagrams.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-venv \
       latexmk \
@@ -15,7 +16,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       texlive-plain-generic \
       lmodern \
       ghostscript \
+      chromium \
+      fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
+
+# ---- mermaid-cli for diagram rendering (uses the system chromium) ----
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+RUN npm install -g @mermaid-js/mermaid-cli@11 && npm cache clean --force
 
 WORKDIR /app
 

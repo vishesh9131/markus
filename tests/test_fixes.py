@@ -399,3 +399,54 @@ def test_article_preamble_guards():
 def test_preamble_before_title_not_after_author():
     tex = _tex("---\ntitle: T\nauthor: A\ntemplate: revtex\n---\n\nBody.\n", template="revtex")
     assert tex.index("end markus preamble") < tex.index("\\title{")
+
+
+# --- colors + mermaid (color/diagram features) ---
+
+def test_inline_text_color():
+    tex = _tex("This is [important]{color=red} text.")
+    assert "\\textcolor{red}{important}" in tex
+
+
+def test_inline_hex_color():
+    tex = _tex("[brandy]{color=#ff8800}")
+    assert "\\textcolor[HTML]{FF8800}{brandy}" in tex
+
+
+def test_inline_background_and_combo():
+    tex = _tex("[hot]{color=white bg=red}")
+    assert "\\colorbox{red}{\\textcolor{white}{hot}}" in tex
+
+
+def test_highlight_shorthand():
+    tex = _tex("a ==marked== word")
+    assert "\\colorbox{yellow}{marked}" in tex
+
+
+def test_colored_horizontal_rule():
+    from markus.ast import HorizontalRule
+    doc = parse("a\n\n--- {color=red}\n\nb\n")
+    hr = [b for b in doc.blocks if isinstance(b, HorizontalRule)][0]
+    assert hr.color == "red"
+    assert "\\textcolor{red}{\\rule" in emit(doc)
+
+
+def test_mermaid_fence_parsed():
+    from markus.ast import MermaidBlock
+    doc = parse("```mermaid\ngraph TD; A-->B\n```\n")
+    assert isinstance(doc.blocks[0], MermaidBlock)
+
+
+def test_mermaid_fallback_when_not_rendered():
+    # no image set -> emitter shows the source, build stays valid
+    tex = _tex("```mermaid\ngraph TD; A-->B\n```\n")
+    assert "renderer not available" in tex
+    assert "graph TD; A-" in tex
+
+
+def test_mermaid_image_when_rendered():
+    from markus.parser import parse as _parse
+    doc = _parse("```mermaid\ngraph TD; A-->B\n```\n")
+    doc.blocks[0].image = "/tmp/markus-mermaid-0.pdf"
+    tex = emit(doc, template="notes")
+    assert "\\includegraphics[width=\\linewidth,keepaspectratio]{/tmp/markus-mermaid-0.pdf}" in tex

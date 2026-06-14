@@ -29,9 +29,11 @@ from markus.ast import (
     ListItem,
     MathBlock,
     MathInline,
+    MermaidBlock,
     Paragraph,
     RawLatex,
     Ref,
+    Span,
     Strikeout,
     Strong,
     Table,
@@ -55,7 +57,9 @@ FENCE_OPEN_RE = re.compile(r"^(`{3,}|~{3,})\s*([A-Za-z0-9_+#.-]*)\s*(\{[^}]*\})?
 TABLE_SEP_RE = re.compile(r"^\|?[\s:|-]+\|[\s|:-]*\s*$")
 ENV_OPEN_RE = re.compile(r"^:::\s*(\w+)(?:\s+(.+))?\s*$")
 ENV_CLOSE_RE = re.compile(r"^:::\s*$")
-HRULE_RE = re.compile(r"^(-{3,}|\*{3,}|_{3,})\s*$")
+HRULE_RE = re.compile(r"^(-{3,}|\*{3,}|_{3,})\s*(\{[^}]*\})?\s*$")
+COLOR_ATTR_RE = re.compile(r"\bcolor\s*=\s*([#\w]+)")
+BG_ATTR_RE = re.compile(r"\b(?:bg|background|highlight)\s*=\s*([#\w]+)")
 LIST_ITEM_RE = re.compile(r"^(\s*)([-*+]|\d{1,9}[.)])\s+(.*)$")
 TASK_MARK_RE = re.compile(r"^\[([ xX])\]\s+(.*)$")
 FOOTNOTE_DEF_RE = re.compile(r"^\[\^([\w-]+)\]:\s+(.*)$")
@@ -151,8 +155,11 @@ def _parse_blocks(
             if i < n:
                 i += 1
             code = "\n".join(chunk)
-            if lang and lang.lower() in {"latex", "tex"} :
+            low = lang.lower() if lang else ""
+            if low in {"latex", "tex"}:
                 blocks.append(RawLatex(content=code, line=start_line))
+            elif low in {"mermaid", "mmd"}:
+                blocks.append(MermaidBlock(code=code, line=start_line))
             else:
                 blocks.append(CodeBlock(code=code, language=lang, line=start_line))
             continue
@@ -247,8 +254,11 @@ def _parse_blocks(
             continue
 
         # horizontal rule
-        if HRULE_RE.match(stripped):
-            blocks.append(HorizontalRule(line=lineno(i)))
+        hr_m = HRULE_RE.match(stripped)
+        if hr_m:
+            attrs = hr_m.group(2) or ""
+            cm = COLOR_ATTR_RE.search(attrs)
+            blocks.append(HorizontalRule(line=lineno(i), color=cm.group(1) if cm else None))
             i += 1
             continue
 
@@ -538,8 +548,10 @@ _INLINE_PATTERNS = [
     ("ref", re.compile(r"@(fig|eq|sec|tbl):([\w:-]+)")),
     ("cite", re.compile(r"(?<![\w.@-])@([A-Za-z][\w:-]*)")),
     ("math", re.compile(r"\$(?!\s)([^$\n]+?)(?<!\s)\$(?!\d)")),
+    ("span", re.compile(r"\[([^\]]+)\]\{([^}]*)\}")),
     ("link", re.compile(r"\[([^\]]+)\]\(([^)]+)\)")),
     ("strong", re.compile(r"\*\*((?:[^*]|\*(?!\*))+)\*\*")),
+    ("mark", re.compile(r"==([^=\n]+)==")),
     ("strike", re.compile(r"~~([^~]+)~~")),
     ("emph", re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)")),
 ]
@@ -553,8 +565,9 @@ def parse_inlines(text: str) -> list[Inline]:
 def _parse_inlines(text: str) -> list[Inline]:
     if not text:
         return []
-    # strip trailing attribute block from paragraph text
-    text = ATTR_RE.sub("", text).rstrip()
+    # strip a trailing block-level attribute (e.g. a leaked heading label), but
+    # keep an inline span's own ]{...} attributes intact
+    text = re.sub(r"(?<!\])\{[^}]*\}\s*$", "", text).rstrip()
 
     nodes: list[Inline] = []
     pos = 0
@@ -596,6 +609,19 @@ def _parse_inlines(text: str) -> list[Inline]:
             nodes.append(Cite(key=m.group(1)))
         elif kind == "math":
             nodes.append(MathInline(latex=m.group(1)))
+        elif kind == "span":
+            attrs = m.group(2)
+            cm = COLOR_ATTR_RE.search(attrs)
+            bm = BG_ATTR_RE.search(attrs)
+            nodes.append(
+                Span(
+                    children=_parse_inlines(m.group(1)),
+                    color=cm.group(1) if cm else None,
+                    bg=bm.group(1) if bm else None,
+                )
+            )
+        elif kind == "mark":
+            nodes.append(Span(children=_parse_inlines(m.group(1)), bg="yellow"))
         elif kind == "link":
             nodes.append(Link(text=m.group(1), url=m.group(2)))
         elif kind == "code":

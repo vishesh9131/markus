@@ -102,3 +102,8 @@ def find_pdflatex() -> str | None:
 
 def find_bibtex() -> str | None:
     return _find_tool("bibtex")
+
+
+def find_mmdc() -> str | None:
+    """mermaid-cli (mmdc) for rendering ```mermaid diagrams; usually on PATH."""
+    return shutil.which("mmdc")

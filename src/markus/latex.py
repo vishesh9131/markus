@@ -27,9 +27,11 @@ from markus.ast import (
     ListBlock,
     MathBlock,
     MathInline,
+    MermaidBlock,
     Paragraph,
     RawLatex,
     Ref,
+    Span,
     Strikeout,
     Strong,
     Table,
@@ -610,6 +612,15 @@ def _escape_key(k: str) -> str:
     return re.sub(r"[^\w:,-]", "", k)
 
 
+def _color_cmd(cmd: str, color: str, inner: str) -> str:
+    """\\textcolor / \\colorbox with named ('red') or hex ('#ff8800') colours."""
+    c = color.strip()
+    if c.startswith("#") and re.fullmatch(r"#[0-9A-Fa-f]{6}", c):
+        return f"{cmd}[HTML]{{{c[1:].upper()}}}{{{inner}}}"
+    safe = re.sub(r"[^A-Za-z]", "", c) or "black"
+    return f"{cmd}{{{safe}}}{{{inner}}}"
+
+
 def _emit_code_block(block: CodeBlock) -> str:
     code = _sanitize_verbatim(block.code)
     lang = (block.language or "").lower()
@@ -682,7 +693,13 @@ class _Emitter:
             return f"\\begin{{quote}}\n{inner}\n\\end{{quote}}"
 
         if isinstance(block, HorizontalRule):
-            return "\\par\\medskip\\noindent\\rule{\\linewidth}{0.4pt}\\par\\medskip"
+            rule = "\\rule{\\linewidth}{0.4pt}"
+            if block.color:
+                rule = _color_cmd("\\textcolor", block.color, rule)
+            return f"\\par\\medskip\\noindent{rule}\\par\\medskip"
+
+        if isinstance(block, MermaidBlock):
+            return self.mermaid(block)
 
         if isinstance(block, FootnoteDef):
             return ""  # inlined at the reference site
@@ -748,6 +765,33 @@ class _Emitter:
             out += f"\\label{{{ql}}}\n"
         out += "\\end{figure}"
         return out
+
+    def mermaid(self, block: MermaidBlock) -> str:
+        # rendered to an image by the CLI; otherwise show the source as a fallback
+        if block.image:
+            graphic = f"\\includegraphics[width=\\linewidth,keepaspectratio]{{{_escape_path(block.image)}}}"
+            cap = self.inline_text(block.caption) if block.caption else ""
+            ql = _qual_label("fig", block.label)
+            if not self.spec.floats:
+                out = "\\begin{center}\n" + graphic + "\n"
+                if cap:
+                    out += f"\\captionof{{figure}}{{{cap}}}\n"
+                if ql:
+                    out += f"\\label{{{ql}}}\n"
+                return out + "\\end{center}"
+            out = "\\begin{figure}[htbp]\n\\centering\n" + graphic + "\n"
+            if cap:
+                out += f"\\caption{{{cap}}}\n"
+            if ql:
+                out += f"\\label{{{ql}}}\n"
+            return out + "\\end{figure}"
+        # fallback: mermaid renderer unavailable
+        code = _sanitize_verbatim(block.code)
+        return (
+            "\\begin{quote}\\small\\itshape mermaid diagram "
+            "(renderer not available)\\end{quote}\n"
+            f"\\begin{{lstlisting}}\n{code}\n\\end{{lstlisting}}"
+        )
 
     def list_block(self, block: ListBlock) -> str:
         env = "enumerate" if block.ordered else "itemize"
@@ -841,6 +885,13 @@ class _Emitter:
                 parts.append(f"\\textit{{{self.inlines(n.children)}}}")
             elif isinstance(n, Strikeout):
                 parts.append(f"\\sout{{{self.inlines(n.children)}}}")
+            elif isinstance(n, Span):
+                inner = self.inlines(n.children)
+                if n.color:
+                    inner = _color_cmd("\\textcolor", n.color, inner)
+                if n.bg:
+                    inner = _color_cmd("\\colorbox", n.bg, inner)
+                parts.append(inner)
             elif isinstance(n, Code):
                 parts.append(f"\\texttt{{{_latex_escape(n.value, quotes=False)}}}")
             elif isinstance(n, MathInline):

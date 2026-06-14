@@ -21,6 +21,7 @@ from markus.ast import (
     MathBlock,
     Paragraph,
     Ref,
+    Span,
     Strikeout,
     Strong,
     Table,
@@ -46,7 +47,7 @@ def _walk_inlines(nodes: list[Inline], line: int | None, refs, cites, fnotes) ->
             cites.extend((k, line) for k in n.keys)
         elif isinstance(n, FootnoteRef):
             fnotes.append((n.key, line))
-        elif isinstance(n, (Strong, Emphasis, Strikeout)):
+        elif isinstance(n, (Strong, Emphasis, Strikeout, Span)):
             _walk_inlines(n.children, line, refs, cites, fnotes)
 
 

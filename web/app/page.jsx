@@ -21,7 +21,17 @@ export default async function Landing() {
           <a href="#pricing">Pricing</a>
           <ThemeToggle className="lp-theme-toggle" />
           {signedIn ? (
-            <Link className="cta sm" href="/studio">Open Studio</Link>
+            <>
+              <Link className="lp-account" href="/studio/account" title={`${session.user.email} · Account`}>
+                {session.user.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={session.user.image} alt="Account" referrerPolicy="no-referrer" />
+                ) : (
+                  (session.user.name || session.user.email || "?").trim().charAt(0).toUpperCase()
+                )}
+              </Link>
+              <Link className="cta sm" href="/studio">Open Studio</Link>
+            </>
           ) : (
             <SignInButton mode={AUTH_MODE} className="cta sm">
               Sign in
