@@ -30,6 +30,54 @@ AUX_DIR_NAME = ".markus-aux"
 AUX_EXTS = (".aux", ".log", ".out", ".fls", ".fdb_latexmk", ".bbl", ".blg", ".toc", ".synctex.gz", ".nav", ".snm", ".vrb")
 
 
+def _sandbox() -> bool:
+    """True when compiling untrusted input (set by the web service).
+
+    In sandbox mode we lock TeX down: no shell-escape, no reading/writing files
+    outside the working tree, and a hard time limit. Local CLI use is trusted
+    and stays unrestricted so legitimate \\input/\\includegraphics keep working.
+    """
+    return os.environ.get("MARKUS_SANDBOX") == "1"
+
+
+def _max_seconds() -> int | None:
+    """Per-process LaTeX time limit. None = no limit (trusted local use)."""
+    raw = os.environ.get("MARKUS_MAX_SECONDS", "").strip()
+    if raw:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            pass
+    return 120 if _sandbox() else None
+
+
+def _harden_env(env: dict) -> dict:
+    """Disable TeX shell-escape when compiling untrusted input (MARKUS_SANDBOX=1).
+
+    kpathsea reads `shell_escape` as an environment override for every engine
+    (pdflatex, latexmk's engine, bibtex), so this kills \\write18 / shell
+    execution regardless of the driver. (We intentionally do NOT set
+    openin_any=p: paranoid mode also blocks the main .tex, vendored IEEE class,
+    and mermaid images, all at absolute paths. File reads are instead blocked at
+    the emitter — see _sandbox_guard in latex.py.)
+    """
+    if _sandbox():
+        env["shell_escape"] = "f"
+    return env
+
+
+def _run_tex(cmd, **kwargs):
+    """subprocess.run for a TeX tool, enforcing the sandbox time limit."""
+    secs = _max_seconds()
+    try:
+        return subprocess.run(cmd, timeout=secs, **kwargs)
+    except subprocess.TimeoutExpired as exc:
+        raise click.ClickException(
+            f"LaTeX build timed out after {secs}s — the document may contain an "
+            "infinite loop or be too complex to compile."
+        ) from exc
+
+
 def _extract_log_errors(log_path: Path, limit: int = 6) -> list[str]:
     if not log_path.is_file():
         return []
@@ -98,8 +146,9 @@ def _compile_pdf(
     for var in ("BIBINPUTS", "TEXINPUTS"):
         existing = env.get(var, "")
         env[var] = f"{out_dir.resolve()}{os.pathsep}{cwd}{os.pathsep}{existing}"
+    _harden_env(env)
 
-    result = subprocess.run(
+    result = _run_tex(
         aux_cmd, capture_output=True, text=True, encoding="utf-8",
         errors="replace", env=env, cwd=cwd,
     )
@@ -108,7 +157,7 @@ def _compile_pdf(
         and "unknown option" in (result.stderr or "").lower()
     ):
         # very old latexmk without aux-dir support
-        result = subprocess.run(
+        result = _run_tex(
             base_cmd, capture_output=True, text=True, encoding="utf-8",
             errors="replace", env=env, cwd=cwd,
         )
@@ -142,10 +191,11 @@ def _compile_pdf(
 
 
 def _run_pdflatex(pdflatex: str, tex_path: Path, out_dir: Path, env, cwd: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
+    return _run_tex(
         [
             pdflatex,
             "-interaction=nonstopmode",
+            "-no-shell-escape",
             "-output-directory",
             str(out_dir.resolve()),
             str(tex_path.resolve()),
@@ -182,6 +232,7 @@ def _compile_pdf_fast(
     # let pdflatex/bibtex find images and the copied .bib
     for var in ("BIBINPUTS", "TEXINPUTS"):
         env[var] = f"{out_dir.resolve()}{os.pathsep}{cwd}{os.pathsep}{env.get(var, '')}"
+    _harden_env(env)
     aux = out_dir / f"{tex_path.stem}.aux"
     warm = aux.exists()
 
@@ -191,7 +242,7 @@ def _compile_pdf_fast(
         tex = tex_path.read_text(encoding="utf-8", errors="replace")
         bibtex = find_bibtex()
         if bibtex and "\\bibliography{" in tex and aux.exists():
-            subprocess.run(
+            _run_tex(
                 [bibtex, tex_path.stem],
                 capture_output=True, text=True, encoding="utf-8",
                 errors="replace", env=env, cwd=str(out_dir.resolve()),

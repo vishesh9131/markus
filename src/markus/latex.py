@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -106,8 +107,28 @@ def _normalize_math_scripts(latex: str) -> str:
     return _SCRIPT_OPERAND_RE.sub(_repl, latex)
 
 
+# File-I/O, shell, and obfuscation primitives that have no place in untrusted
+# math or raw-LaTeX blocks. Neutralised (→ \relax) only when MARKUS_SANDBOX=1,
+# so the public web compiler can't be used to read server files (\input{...}),
+# spawn shells, or build those commands dynamically (\csname/\catcode).
+_SANDBOX_IO_RE = re.compile(
+    r"\\(input|include|subfile|subimport|import|includeonly|InputIfFileExists"
+    r"|IfFileExists|openin|openout|read|readline|write|closein|closeout"
+    r"|immediate|write18|special|directlua|ShellEscape|RequirePackage|usepackage"
+    r"|lstinputlisting|verbatiminput|scantokens|endinput|csname|catcode)"
+    r"(?![a-zA-Z@])"
+)
+
+
+def _sandbox_guard(s: str) -> str:
+    """Strip dangerous primitives from verbatim passthrough under sandbox mode."""
+    if os.environ.get("MARKUS_SANDBOX") == "1":
+        return _SANDBOX_IO_RE.sub(r"\\relax ", s)
+    return s
+
+
 def _math_latex(latex: str) -> str:
-    return _normalize_math_scripts(latex.strip())
+    return _normalize_math_scripts(_sandbox_guard(latex.strip()))
 
 
 ENV_MAP = {
@@ -680,7 +701,7 @@ class _Emitter:
             return _emit_code_block(block)
 
         if isinstance(block, RawLatex):
-            return block.content
+            return _sandbox_guard(block.content)
 
         if isinstance(block, ListBlock):
             return self.list_block(block)

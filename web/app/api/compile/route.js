@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -24,6 +24,31 @@ const MAX_SOURCE = 512 * 1024;
 const COMPILE_TIMEOUT_MS = 90_000;
 const SESSIONS_ROOT = path.join(tmpdir(), "markus-web-sessions");
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000; // reap idle sessions after 2h
+
+// Untrusted-input hardening (the compiler is internet-reachable):
+const MAX_OUTPUT = 16 * 1024 * 1024; // cap child stdout/stderr we buffer
+const MAX_CONCURRENT = Number(process.env.COMPILE_MAX_CONCURRENT || 4); // global pdflatex cap
+const RL_WINDOW_MS = 60_000;
+const RL_MAX = Number(process.env.COMPILE_RATE_LIMIT || 40); // compiles / minute / IP
+const LATEX_MAX_SECONDS = Math.max(10, Math.floor(COMPILE_TIMEOUT_MS / 1000) - 5); // python self-limit
+
+let activeCompiles = 0;
+const rlHits = new Map();
+function clientIp(request) {
+  const xff = request.headers.get("x-forwarded-for") || "";
+  return xff.split(",")[0].trim() || request.headers.get("x-real-ip") || "unknown";
+}
+function rateLimited(ip) {
+  const now = Date.now();
+  if (rlHits.size > 10_000) rlHits.clear(); // crude prune to bound memory
+  const e = rlHits.get(ip);
+  if (!e || now > e.resetAt) {
+    rlHits.set(ip, { count: 1, resetAt: now + RL_WINDOW_MS });
+    return false;
+  }
+  e.count += 1;
+  return e.count > RL_MAX;
+}
 
 // demo bibliography available to every web document as `bib: refs.bib`
 const DEMO_BIB = `@article{knuth1984, author={Donald Knuth}, title={Literate Programming},
@@ -86,12 +111,43 @@ function findMarkus() {
 
 function run(cmd, args, opts = {}) {
   return new Promise((resolve) => {
-    execFile(
-      cmd,
-      args,
-      { timeout: COMPILE_TIMEOUT_MS, maxBuffer: 32 * 1024 * 1024, ...opts },
-      (error, stdout, stderr) => resolve({ error, stdout: stdout ?? "", stderr: stderr ?? "" })
-    );
+    let child;
+    try {
+      // detached → new process group, so a timeout can kill pdflatex (a grandchild
+      // of `markus`), not just the python parent. That fixes runaway orphans.
+      child = spawn(cmd, args, { ...opts, detached: true });
+    } catch (error) {
+      return resolve({ error, stdout: "", stderr: "" });
+    }
+    let stdout = "";
+    let stderr = "";
+    let killed = false;
+    child.stdout?.on("data", (d) => { if (stdout.length < MAX_OUTPUT) stdout += d; });
+    child.stderr?.on("data", (d) => { if (stderr.length < MAX_OUTPUT) stderr += d; });
+    const timer = setTimeout(() => {
+      killed = true;
+      try {
+        process.kill(-child.pid, "SIGKILL"); // whole group
+      } catch {
+        try { child.kill("SIGKILL"); } catch { /* already gone */ }
+      }
+    }, COMPILE_TIMEOUT_MS);
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolve({ error, stdout, stderr });
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      let error = null;
+      if (killed) {
+        error = new Error("Compile timed out");
+        error.killed = true;
+      } else if (code !== 0) {
+        error = new Error(`exited ${code}`);
+        error.code = code;
+      }
+      resolve({ error, stdout, stderr });
+    });
   });
 }
 
@@ -128,6 +184,13 @@ async function reapOldSessions() {
 }
 
 export async function POST(request) {
+  const ip = clientIp(request);
+  if (rateLimited(ip)) {
+    return json({ ok: false, error: "Too many compile requests — please slow down." }, { status: 429 });
+  }
+  if (activeCompiles >= MAX_CONCURRENT) {
+    return json({ ok: false, error: "Compiler busy — please retry in a moment." }, { status: 503 });
+  }
   let body;
   try {
     body = await request.json();
@@ -169,7 +232,19 @@ export async function POST(request) {
     if (!wantPdf) args.push("--tex-only");
     if (fast) args.push("--fast");
 
-    const { error, stderr } = await run(markus, args, { cwd: work });
+    activeCompiles += 1;
+    let result;
+    try {
+      result = await run(markus, args, {
+        cwd: work,
+        // MARKUS_SANDBOX locks down TeX (no shell-escape, file-I/O primitives
+        // neutralised); MARKUS_MAX_SECONDS is the in-process LaTeX time limit.
+        env: { ...process.env, MARKUS_SANDBOX: "1", MARKUS_MAX_SECONDS: String(LATEX_MAX_SECONDS) },
+      });
+    } finally {
+      activeCompiles -= 1;
+    }
+    const { error, stderr } = result;
     const { warnings, errors } = splitStderr(stderr);
 
     let tex = null;
