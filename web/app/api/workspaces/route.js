@@ -1,6 +1,6 @@
 import { auth } from "../../../auth";
 import { getStore } from "../../../lib/storage";
-import { getAccount } from "../../../lib/accounts";
+import { getAccount, reconcilePending } from "../../../lib/accounts";
 import { limitsFor } from "../../../lib/quota";
 import { errorResponse, guard } from "../../../lib/apiError";
 
@@ -13,6 +13,8 @@ export async function GET() {
   if (bad) return bad;
   try {
     const store = getStore(session);
+    // Apply any payment the webhook recorded while the user was away.
+    await reconcilePending(store, session.user.email);
     const account = await getAccount(store, session.user.email);
     const workspaces = await store.listWorkspaces();
     const { name, email, image } = session.user;
