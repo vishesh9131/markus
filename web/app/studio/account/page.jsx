@@ -15,12 +15,18 @@ export default function AccountPage() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/workspaces").then((r) => r.json());
-    if (!res.ok) {
-      if (res.code === "DRIVE_SCOPE") return setError("DRIVE_SCOPE");
-      return setError(res.error || "Failed to load");
+    try {
+      const res = await fetch("/api/workspaces");
+      const j = await res.json().catch(() => null);
+      if (!res.ok || !j || !j.ok) {
+        if (j?.code === "DRIVE_SCOPE") return setError("DRIVE_SCOPE");
+        if (j?.code === "RELOGIN" || res.status === 401) return setError("RELOGIN");
+        return setError(j?.error || `Couldn’t load (HTTP ${res.status})`);
+      }
+      setData(j);
+    } catch {
+      setError("Network error — check your connection and try again.");
     }
-    setData(res);
   }, []);
 
   useEffect(() => {
@@ -63,6 +69,7 @@ export default function AccountPage() {
   }, [load, dialog]);
 
   if (error === "DRIVE_SCOPE") return <div className="dash"><GrantDrive /></div>;
+  if (error === "RELOGIN") return <div className="dash"><GrantDrive reason="relogin" /></div>;
   if (error) return <div className="dash"><div className="dash-empty">{error}</div></div>;
   if (!data) return <div className="dash"><Loader label="Loading your account…" /></div>;
 

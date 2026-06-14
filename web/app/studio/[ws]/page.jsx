@@ -30,14 +30,20 @@ export default function WorkspaceEditor({ params }) {
   const [opening, setOpening] = useState(false);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/workspaces").then((r) => r.json());
-    if (!res.ok) {
-      if (res.code === "DRIVE_SCOPE") return setState({ status: "drive" });
-      return setState({ status: "error", error: res.error });
+    try {
+      const res = await fetch("/api/workspaces");
+      const j = await res.json().catch(() => null);
+      if (!res.ok || !j || !j.ok) {
+        if (j?.code === "DRIVE_SCOPE") return setState({ status: "drive" });
+        if (j?.code === "RELOGIN" || res.status === 401) return setState({ status: "relogin" });
+        return setState({ status: "error", error: j?.error || `Couldn’t load (HTTP ${res.status})` });
+      }
+      const ws = j.workspaces.find((w) => w.id === wsId);
+      if (!ws) return setState({ status: "error", error: "Workspace not found" });
+      setState({ status: "ready", ws, account: j.account, limits: j.limits, user: j.user });
+    } catch {
+      setState({ status: "error", error: "Network error — try again." });
     }
-    const ws = res.workspaces.find((w) => w.id === wsId);
-    if (!ws) return setState({ status: "error", error: "Workspace not found" });
-    setState({ status: "ready", ws, account: res.account, limits: res.limits, user: res.user });
   }, [wsId]);
 
   useEffect(() => {
@@ -101,6 +107,7 @@ export default function WorkspaceEditor({ params }) {
 
   if (state.status === "loading") return <div className="dash"><Loader label="Opening workspace…" /></div>;
   if (state.status === "drive") return <div className="dash"><GrantDrive /></div>;
+  if (state.status === "relogin") return <div className="dash"><GrantDrive reason="relogin" /></div>;
   if (state.status === "error") return <div className="dash"><div className="dash-empty">{state.error} · <Link href="/studio">back</Link></div></div>;
 
   const { ws, account } = state;

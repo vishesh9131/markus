@@ -46,20 +46,56 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
   callbacks: {
     async jwt({ token, account }) {
+      // initial sign-in
       if (account?.provider === "google") {
         token.googleAccessToken = account.access_token;
         token.googleRefreshToken = account.refresh_token ?? token.googleRefreshToken;
-        token.googleExpiresAt = account.expires_at;
+        token.googleExpiresAt = account.expires_at ? account.expires_at * 1000 : Date.now() + 3300_000;
         token.googleScope = account.scope || "";
+        token.error = undefined;
+        return token;
+      }
+      // demo / no google
+      if (!token.googleAccessToken && !token.googleRefreshToken) return token;
+      // still valid (60s skew)?
+      if (token.googleExpiresAt && Date.now() < token.googleExpiresAt - 60_000) return token;
+      // expired -> refresh with the refresh token
+      if (!token.googleRefreshToken) {
+        token.error = "RefreshFailed";
+        token.googleAccessToken = null;
+        return token;
+      }
+      try {
+        const res = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: process.env.AUTH_GOOGLE_ID,
+            client_secret: process.env.AUTH_GOOGLE_SECRET,
+            grant_type: "refresh_token",
+            refresh_token: token.googleRefreshToken,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "refresh_failed");
+        token.googleAccessToken = data.access_token;
+        token.googleExpiresAt = Date.now() + (data.expires_in ?? 3600) * 1000;
+        if (data.refresh_token) token.googleRefreshToken = data.refresh_token;
+        if (data.scope) token.googleScope = data.scope;
+        token.error = undefined;
+      } catch {
+        token.error = "RefreshFailed";
+        token.googleAccessToken = null;
       }
       return token;
     },
     async session({ session, token }) {
       session.googleAccessToken = token.googleAccessToken || null;
-      session.isDemo = !token.googleAccessToken;
+      session.isDemo = !token.googleAccessToken && !token.googleRefreshToken;
+      session.error = token.error || null;
       // did the user actually grant the Drive permission?
       session.driveGranted =
-        !token.googleAccessToken || Boolean(token.googleScope?.includes("drive.file"));
+        session.isDemo || Boolean(token.googleScope?.includes("drive.file"));
       return session;
     },
     authorized({ auth: session, request: { nextUrl } }) {
