@@ -1157,9 +1157,10 @@ html[data-theme="dark"] .paper-sheet {
 .ws-tile:hover { border-color: var(--line-strong); }
 .ws-tile-thumbs { display: block; text-decoration: none; }
 .ws-thumb-grid {
-  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px;
-  padding: 14px; background: var(--surface-2); aspect-ratio: 4 / 3; border-bottom: 1px solid var(--line);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  padding: 14px; background: var(--surface-2); border-bottom: 1px solid var(--line);
 }
+.ws-thumb-grid .doc-thumb { aspect-ratio: 3 / 4; min-height: 0; } /* portrait pages, not squashed */
 .ws-tile-foot { display: flex; align-items: center; gap: 8px; padding: 11px 13px; }
 .ws-tile-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; text-decoration: none; color: var(--ink); }
 .ws-tile-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1278,9 +1279,15 @@ svg { flex-shrink: 0; }
 .view-btn.active { color: var(--accent-contrast); background: var(--accent); }
 
 /* ---- workspace tiles: 4 view types ---- */
-.ws-cards.view-gallery { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
-.ws-cards.view-grid { grid-template-columns: repeat(auto-fill, minmax(256px, 1fr)); }
-.ws-cards.view-compact { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+/* per-view tile sizing so gallery/grid/compact differ even with one workspace */
+.ws-cards.view-gallery { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.ws-cards.view-gallery .ws-tile { max-width: 360px; }
+.ws-cards.view-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.ws-cards.view-grid .ws-tile { max-width: 300px; }
+.ws-cards.view-compact { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+.ws-cards.view-compact .ws-tile { max-width: 220px; }
+.ws-cards.view-compact .ws-thumb-grid { padding: 9px; gap: 5px; }
+.ws-cards.view-compact .ws-tile-foot { padding: 8px 10px; }
 .ws-cards.view-list { display: flex; flex-direction: column; gap: 8px; }
 .ws-cards.view-list .ws-tile { flex-direction: row; align-items: stretch; border-radius: 10px; }
 .ws-cards.view-list .ws-thumb-grid { width: 84px; aspect-ratio: 4 / 3; border-bottom: none; border-right: 1px solid var(--line); padding: 8px; gap: 4px; }
