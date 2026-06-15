@@ -739,6 +739,35 @@ html[data-theme="dark"] .topbar select {
 .legal-prose code { font-family: var(--mono); font-size: 0.92em; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; }
 .legal-prose a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
 .legal-prose a:hover { color: var(--ink-soft); }
+.legal-prose pre {
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px; margin: 0 0 16px; overflow-x: auto;
+  font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); white-space: pre;
+}
+.legal-prose pre code { background: none; border: none; padding: 0; font-size: inherit; }
+
+/* live suggestions panel (editor pane) */
+.hints { flex: 0 0 auto; border-top: 1px solid var(--line); background: var(--surface-2); }
+.hints-head {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 12px; background: none; border: none; cursor: pointer;
+  font-family: var(--sans); font-size: 12.5px; color: var(--ink-soft);
+}
+.hints-head:hover { color: var(--ink); }
+.hints-chevron { color: var(--ink-faint); transition: transform 0.15s ease; transform: rotate(-90deg); }
+.hints.open .hints-chevron { transform: rotate(0deg); }
+.hints-doclink {
+  margin-left: auto; color: var(--ink-soft); text-decoration: none;
+  border: 1px solid var(--line-strong); border-radius: 6px; padding: 2px 9px; font-size: 12px;
+}
+.hints-doclink:hover { border-color: var(--ink-soft); color: var(--ink); }
+.hints-list { list-style: none; margin: 0; padding: 2px 12px 10px; max-height: 142px; overflow-y: auto; display: flex; flex-direction: column; gap: 7px; }
+.hint { position: relative; padding-left: 16px; font-size: 12.5px; line-height: 1.45; color: var(--ink-soft); }
+.hint:before { content: ""; position: absolute; left: 0; top: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); }
+.hint.tip:before { background: var(--green); }
+.hint.warn:before { background: var(--amber); }
+.hint.ok { color: var(--ink-faint); }
+.hint.ok:before { background: var(--green); }
 
 /* ===================== dashboard ===================== */
 .dash { min-height: 100vh; display: flex; flex-direction: column; }

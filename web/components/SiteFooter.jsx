@@ -9,6 +9,7 @@ export default function SiteFooter() {
       <span>© {year} Markus Studio</span>
       <nav className="footer-links">
         <Link href="/#pricing">Pricing</Link>
+        <Link href="/help">Docs</Link>
         <Link href="/terms">Terms</Link>
         <Link href="/privacy">Privacy</Link>
         <Link href="/refunds">Refunds</Link>

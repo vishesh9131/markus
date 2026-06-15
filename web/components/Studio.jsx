@@ -4,8 +4,9 @@ import { markdown } from "@codemirror/lang-markdown";
 import CodeMirror, { EditorView } from "@uiw/react-codemirror";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_EXAMPLE, EXAMPLES, TEMPLATES } from "../lib/examples";
+import { getHints } from "../lib/suggest";
 import { useDialog } from "./Dialog";
 import { Btn } from "./Btn";
 import { exportPdfWithPreference } from "../lib/pdfExport";
@@ -80,6 +81,7 @@ export default function Studio({
   const [savedAt, setSavedAt] = useState(null);
   const [dirty, setDirty] = useState(false);
   const [waking, setWaking] = useState(false);
+  const [hintsOpen, setHintsOpen] = useState(true);
 
   const timer = useRef(null);
   const inflight = useRef(null);
@@ -121,6 +123,7 @@ export default function Studio({
   }, []);
 
   const loaderSrc = theme === "dark" ? "/mks-loader-cream.gif" : "/mks-loader.gif";
+  const hints = useMemo(() => getHints(source, { plan }), [source, plan]);
 
   const compile = useCallback(
     async (opts = {}) => {
@@ -450,6 +453,26 @@ export default function Studio({
               onChange={onChange}
               basicSetup={{ lineNumbers: true, foldGutter: false, highlightActiveLine: true }}
             />
+          </div>
+
+          <div className={`hints ${hintsOpen ? "open" : "closed"}`}>
+            <button type="button" className="hints-head" onClick={() => setHintsOpen((o) => !o)}>
+              <svg className="hints-chevron" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M3 4.5L6 7.5l3-3" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>Suggestions{hints.length ? ` · ${hints.length}` : ""}</span>
+              <a className="hints-doclink" href="/help" target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+                Docs
+              </a>
+            </button>
+            {hintsOpen && (
+              <ul className="hints-list">
+                {hints.length === 0 && <li className="hint ok">Looks good — keep writing.</li>}
+                {hints.map((h) => (
+                  <li key={h.id} className={`hint ${h.level}`}>{h.text}</li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 

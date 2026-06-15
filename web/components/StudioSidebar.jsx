@@ -24,6 +24,15 @@ function IconUser() {
     </svg>
   );
 }
+function IconHelp() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="8" cy="8" r="6.2" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M6.2 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.6 1.4-1.6 2.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <circle cx="8" cy="11.6" r="0.7" fill="currentColor" />
+    </svg>
+  );
+}
 
 // Shared left navigation for the studio dashboard + workspace views. Theme-aware
 // (uses the paper/ink palette), and collapses to a top strip on small screens.
@@ -60,6 +69,9 @@ export default function StudioSidebar({ user, account, onUpgrade, onRedeem }) {
         </Link>
         <Link className={`side-link${onAccount ? " active" : ""}`} href="/studio/account">
           <IconUser /> Account
+        </Link>
+        <Link className="side-link" href="/help" target="_blank">
+          <IconHelp /> Docs &amp; help
         </Link>
       </nav>
 
