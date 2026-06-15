@@ -107,5 +107,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return true;
     },
   },
-  pages: { signIn: "/" },
+  // Cancel/deny at Google → bounce back to the landing instead of Auth.js's
+  // default "Server error" page. (Sign-in works, so config is fine.)
+  pages: { signIn: "/", error: "/" },
 });
