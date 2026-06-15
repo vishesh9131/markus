@@ -2,18 +2,28 @@
 
 import { useState } from "react";
 import { signIn, signOut } from "next-auth/react";
+import { useDialog } from "./Dialog";
 
 export function SignInButton({ mode = "demo", className = "cta", children }) {
   const provider = mode === "google" ? "google" : "demo";
   const [busy, setBusy] = useState(false);
+  const dialog = useDialog();
+  const start = async () => {
+    if (provider === "google") {
+      const ok = await dialog.confirm(
+        "On Google's next screen, you MUST tick the Google Drive checkbox. Without it, Markus can't save your work and sign-in will fail.",
+        { title: "One quick step", okText: "Continue to Google", cancelText: "Cancel" }
+      );
+      if (!ok) return;
+    }
+    setBusy(true);
+    signIn(provider, { callbackUrl: "/studio" });
+  };
   return (
     <button
       className={className}
       disabled={busy}
-      onClick={() => {
-        setBusy(true);
-        signIn(provider, { callbackUrl: "/studio" });
-      }}
+      onClick={start}
     >
       {busy && <span className="btn-spin" aria-hidden="true" />}
       {children || (

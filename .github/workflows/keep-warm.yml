@@ -1,0 +1,17 @@
+name: keep-warm
+
+# Pings the Render compiler so the free instance never spins down (no cold start).
+# GitHub cron can run late under load, so we ping every 5 min vs Render's ~15 min
+# idle timeout. For a hard guarantee use a dedicated pinger (cron-job.org) or
+# Render's paid instance.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake the compiler
+        run: curl -fsS --max-time 120 https://markus-studio.onrender.com/api/health || true
