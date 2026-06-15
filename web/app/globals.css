@@ -1064,10 +1064,14 @@ html[data-theme="dark"] .paper-sheet {
   .main > .pane:last-child { flex: 1 1 auto; min-height: 38vh; }
   .divider { display: none; }             /* col-resize handle is desktop-only */
 
-  /* studio topbar wraps instead of overflowing */
+  /* studio topbar wraps into tidy rows instead of a ragged jumble */
   .topbar { flex-wrap: wrap; padding: 8px 10px; row-gap: 6px; }
   .topbar .brand { margin-right: auto; }
   .topbar .spacer { display: none; }
+  .topbar .doc-chip { flex-basis: 100%; max-width: 100%; }   /* doc name on its own row */
+  .topbar select { flex: 1 1 130px; min-width: 0; }          /* selects fill the row evenly */
+  .topbar .compile, .topbar .save-btn { flex: 1 1 auto; }    /* primary actions share a row */
+  .topbar .status { order: 99; flex-basis: 100%; margin: 0; } /* status drops to its own line */
 }
 
 @media (max-width: 600px) {
@@ -1251,6 +1255,7 @@ svg { flex-shrink: 0; }
 
 /* ===================== view toolbar (sort + 4 view types) ===================== */
 .view-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: -6px 0 18px; flex-wrap: wrap; }
+@media (max-width: 600px) { .view-toolbar { justify-content: space-between; } .view-sort select { flex: 1; } }
 .view-sort { display: inline-flex; }
 .view-sort select {
   font-family: var(--sans); font-size: 13px; color: var(--ink);
