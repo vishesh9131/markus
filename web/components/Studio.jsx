@@ -78,6 +78,7 @@ export default function Studio({
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const [dirty, setDirty] = useState(false);
+  const [waking, setWaking] = useState(false);
 
   const timer = useRef(null);
   const inflight = useRef(null);
@@ -135,29 +136,49 @@ export default function Studio({
       const ctrl = new AbortController();
       inflight.current = ctrl;
       setBusy(true);
+      // ponytail: Render free tier cold-starts (502/HTML) on the first hit after
+      // idle, which crashes res.json(). Retry across the wake window instead of
+      // showing "failed". Delays sum to ~60s; add a keep-warm ping to avoid it.
+      const delays = [0, 5000, 10000, 15000, 15000, 15000];
       try {
-        const res = await fetch(`${COMPILE_BASE}/api/compile`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-          signal: ctrl.signal,
-        });
-        const data = await res.json();
-        if (ctrl.signal.aborted) return;
-        setTex(data.tex ?? null);
-        setWarnings(data.warnings ?? []);
-        setError(data.error ?? null);
-        setMs(data.ms ?? null);
-        if (data.pdf) {
-          setPdfData(data.pdf);
-          const bytes = Uint8Array.from(atob(data.pdf), (c) => c.charCodeAt(0));
-          const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-          if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
-          pdfUrlRef.current = url;
-          setPdfUrl(url);
+        for (let attempt = 0; attempt < delays.length; attempt++) {
+          if (delays[attempt]) {
+            setWaking(true);
+            await new Promise((r) => setTimeout(r, delays[attempt]));
+          }
+          if (ctrl.signal.aborted) return;
+          try {
+            const res = await fetch(`${COMPILE_BASE}/api/compile`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+              signal: ctrl.signal,
+            });
+            if (res.status >= 500) throw new Error(`server ${res.status}`); // likely waking → retry
+            const data = await res.json(); // HTML 502 → throws → retry
+            if (ctrl.signal.aborted) return;
+            setWaking(false);
+            setTex(data.tex ?? null);
+            setWarnings(data.warnings ?? []);
+            setError(data.error ?? null);
+            setMs(data.ms ?? null);
+            if (data.pdf) {
+              setPdfData(data.pdf);
+              const bytes = Uint8Array.from(atob(data.pdf), (c) => c.charCodeAt(0));
+              const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+              if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
+              pdfUrlRef.current = url;
+              setPdfUrl(url);
+            }
+            return; // got a real response (success or genuine LaTeX error) — done
+          } catch (e) {
+            if (e.name === "AbortError" || ctrl.signal.aborted) return;
+            if (attempt === delays.length - 1) {
+              setWaking(false);
+              setError("Couldn’t reach the compiler — it may be waking up. Try again in a moment.");
+            }
+          }
         }
-      } catch (e) {
-        if (e.name !== "AbortError") setError(String(e.message || e));
       } finally {
         if (inflight.current === ctrl) {
           inflight.current = null;
@@ -303,7 +324,7 @@ export default function Studio({
   const pageOver = plan !== "premium" && pagesRef.current > 5;
   const statusDot = busy ? "busy" : error ? "err" : pdfUrl ? "ok" : "";
   const statusText = busy
-    ? "Compiling…"
+    ? (waking ? "Waking the compiler… (first build can take ~1 min)" : "Compiling…")
     : error
       ? "Build failed"
       : pdfUrl
