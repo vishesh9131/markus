@@ -52,6 +52,20 @@ export default function Dashboard() {
     const t = localStorage.getItem("markus-studio-theme");
     if (t) document.documentElement.dataset.theme = t;
     load();
+    // ponytail: warm the compiler (Render wake + pdflatex format cache) once per
+    // session so the first real compile is fast. Skipped per-doc precompile —
+    // this warms the shared cold-start cost; add per-doc warming if needed.
+    try {
+      if (!sessionStorage.getItem("mks-warmed")) {
+        sessionStorage.setItem("mks-warmed", "1");
+        const base = process.env.NEXT_PUBLIC_COMPILE_URL || "";
+        fetch(`${base}/api/compile`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source: "# warmup\n", sessionId: "warmup", fast: true }),
+        }).catch(() => {});
+      }
+    } catch { /* sessionStorage unavailable */ }
   }, [load]);
 
   const upgrade = useCallback(async () => {

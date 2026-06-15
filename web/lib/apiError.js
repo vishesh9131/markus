@@ -2,8 +2,14 @@
 // token failures become RELOGIN so the UI can prompt a fresh sign-in.
 export function errorResponse(e) {
   const msg = String(e?.message || e || "Server error");
-  const authish =
-    /invalid_grant|invalid credentials|unauthorized|401|403|insufficient|token|auth/i.test(msg);
+  // Missing Drive permission → re-prompt the Drive checkbox, not a generic relogin.
+  if (/insufficient|scope|drive\.file|ACCESS_TOKEN_SCOPE|PERMISSION_DENIED/i.test(msg)) {
+    return Response.json(
+      { ok: false, code: "DRIVE_SCOPE", error: "Markus needs permission to save files in your Google Drive." },
+      { status: 403 }
+    );
+  }
+  const authish = /invalid_grant|invalid credentials|unauthorized|401|403|token|auth/i.test(msg);
   if (authish) {
     return Response.json(
       { ok: false, code: "RELOGIN", error: "Your session expired — please sign in again." },
