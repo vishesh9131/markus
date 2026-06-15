@@ -163,6 +163,7 @@ export default function WorkspaceEditor({ params }) {
       <Studio
         initialDoc={active.content}
         docName={active.name}
+        docId={active.id}
         workspaceName={ws.name}
         backHref="/studio"
         plan={account.tier}
@@ -208,7 +209,7 @@ export default function WorkspaceEditor({ params }) {
           {sortedDocs.map((d) => (
             <button className="file-card" key={d.id} onClick={() => openDoc(d.id)} title={`Open ${d.name}`}>
               <div className="file-card-thumb">
-                <DocThumb name={d.name} />
+                <DocThumb name={d.name} docId={d.id} />
               </div>
               <div className="file-card-foot">
                 <svg className="file-icon" width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">

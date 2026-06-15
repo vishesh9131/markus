@@ -1241,6 +1241,14 @@ html[data-theme="dark"] .paper-sheet {
   .side-name { display: none; }
 }
 
+/* icons/avatars must keep their size in tight flex rows (mobile squash fix) */
+svg { flex-shrink: 0; }
+.lp-account, .side-avatar, .view-btn, .icon-del, .icon-btn, .doc-chip { flex-shrink: 0; }
+
+/* real rendered-page thumbnail (falls back to the paper placeholder) */
+.doc-thumb.has-thumb { padding: 0; overflow: hidden; background: var(--surface); }
+.doc-thumb.has-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+
 /* ===================== view toolbar (sort + 4 view types) ===================== */
 .view-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: -6px 0 18px; flex-wrap: wrap; }
 .view-sort { display: inline-flex; }

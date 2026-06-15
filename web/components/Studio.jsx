@@ -52,6 +52,7 @@ const markusEditorThemeDark = EditorView.theme(
 export default function Studio({
   initialDoc = null,
   docName = null,
+  docId = null,
   workspaceName = null,
   backHref = null,
   plan = "free",
@@ -243,6 +244,21 @@ export default function Studio({
   useEffect(() => {
     saveRef.current = save;
   }, [save]);
+
+  // cache the rendered first page as a per-device grid thumbnail (debounced).
+  // ponytail: localStorage (per device, ~5MB). add server thumbs if cross-device matters.
+  useEffect(() => {
+    if (!docId || !pdfData) return;
+    const t = setTimeout(async () => {
+      try {
+        const { makeThumb } = await import("../lib/pdfThumb");
+        localStorage.setItem(`mks-thumb:${docId}`, await makeThumb(pdfData));
+      } catch {
+        /* quota or render error — keep the placeholder */
+      }
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [docId, pdfData]);
 
   // autosave: persist to the backend shortly after the user stops typing
   useEffect(() => {

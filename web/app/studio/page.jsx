@@ -201,7 +201,7 @@ export default function Dashboard() {
             <div className="ws-tile" key={ws.id}>
               <Link href={`/studio/${ws.id}`} className="ws-tile-thumbs" aria-label={ws.name}>
                 <div className="ws-thumb-grid">
-                  {ws.docs.slice(0, 4).map((d) => <DocThumb key={d.id} name={d.name} mini />)}
+                  {ws.docs.slice(0, 4).map((d) => <DocThumb key={d.id} name={d.name} docId={d.id} mini />)}
                   {Array.from({ length: Math.max(0, 4 - ws.docs.length) }).map((_, i) => (
                     <div className="doc-thumb empty" key={`e${i}`} aria-hidden="true" />
                   ))}
