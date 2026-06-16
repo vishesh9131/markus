@@ -164,18 +164,29 @@ export default function WorkspaceEditor({ params }) {
   // ---- images: upload to Drive, and resolve referenced images to base64 so the
   // cross-origin compiler can render them (cached per name to avoid refetching).
   const imageCache = useRef({});
-  const uploadImage = useCallback(async (file, folderId = null) => {
+  const uploadImage = useCallback(async (file, folderId = null, onProgress) => {
     const base64 = await new Promise((res, rej) => {
       const r = new FileReader();
       r.onload = () => res(String(r.result).split(",")[1] || "");
       r.onerror = () => rej(new Error("Could not read file"));
       r.readAsDataURL(file);
     });
-    const res = await fetch(`/api/workspaces/${wsId}/images`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: file.name, mime: file.type, base64, folderId }),
-    }).then((r) => r.json());
+    const body = JSON.stringify({ name: file.name, mime: file.type, base64, folderId });
+    // XHR (not fetch) so we get upload progress events
+    const res = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `/api/workspaces/${wsId}/images`);
+      xhr.setRequestHeader("Content-Type", "application/json");
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) onProgress({ loaded: e.loaded, total: e.total });
+      };
+      xhr.onload = () => {
+        try { resolve(JSON.parse(xhr.responseText)); }
+        catch { reject(new Error(`Server error (${xhr.status})`)); }
+      };
+      xhr.onerror = () => reject(new Error("Network error during upload"));
+      xhr.send(body);
+    });
     if (!res.ok) throw new Error(res.error || "Upload failed");
     imageCache.current[res.image.name] = base64;
     load(); // refresh so the rail shows the new image
@@ -195,55 +206,42 @@ export default function WorkspaceEditor({ params }) {
     load();
   }, [wsId, load, dialog]);
 
-  // Rename / Duplicate / Move / Delete for a tree item, via the shared dialog.
-  const itemAction = useCallback(async (item) => {
-    const opts = [{ label: "Rename", value: "rename" }];
-    if (item.type === "doc") opts.push({ label: "Duplicate", value: "duplicate" });
-    if (item.type !== "folder") opts.push({ label: "Move to…", value: "move" });
-    opts.push({ label: "Delete", value: "delete" });
-    const action = await dialog.choose(item.name, { title: item.type === "folder" ? "Folder" : "File", options: opts });
-    if (!action) return;
-    const base = `/api/workspaces/${wsId}/items/${item.id}`;
-    const json = (method, body) =>
-      fetch(base, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined }).then((r) => r.json());
-
-    try {
-      if (action === "rename") {
-        const raw = await dialog.prompt("New name", { title: "Rename", defaultValue: item.name });
-        const name = (raw || "").trim();
-        if (!name || name === item.name) return;
-        const r = await json("PATCH", { name });
-        if (!r.ok) throw new Error(r.error);
-      } else if (action === "duplicate") {
-        const copyName = item.name.replace(/(\.[^.]+)?$/, (ext) => ` copy${ext || ""}`);
-        const r = await json("POST", { name: copyName });
-        if (!r.ok) throw new Error(r.error);
-      } else if (action === "move") {
-        const folders = (state.tree?.folders || []).filter((f) => f.id !== item.folderId);
-        const targets = [
-          ...(item.folderId ? [{ label: "Workspace root", value: "__root__" }] : []),
-          ...folders.map((f) => ({ label: f.name, value: f.id })),
-        ];
-        if (targets.length === 0) return dialog.alert("Create a folder first to move files into.", { title: "Move" });
-        const to = await dialog.choose(`Move "${item.name}" to`, { title: "Move", options: targets });
-        if (!to) return;
-        const r = await json("PATCH", { toFolderId: to === "__root__" ? null : to, fromFolderId: item.folderId || null });
-        if (!r.ok) throw new Error(r.error);
-      } else if (action === "delete") {
-        const msg = item.type === "folder"
-          ? `Delete folder “${item.name}” and everything inside it? This can’t be undone.`
-          : `Delete “${item.name}”? This can’t be undone.`;
-        const ok = await dialog.confirm(msg, { title: "Delete", okText: "Delete", danger: true });
-        if (!ok) return;
-        const r = await json("DELETE");
-        if (!r.ok) throw new Error(r.error);
-        if (active?.id === item.id) setActive(null); // deleted the open doc -> back to chooser
-      }
+  // Granular item ops — the editor renders an inline menu and calls these.
+  const apiItem = useCallback(
+    (id, method, body) =>
+      fetch(`/api/workspaces/${wsId}/items/${id}`, {
+        method,
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      }).then((r) => r.json()),
+    [wsId]
+  );
+  const itemOps = {
+    rename: useCallback(async (item, name) => {
+      const n = (name || "").trim();
+      if (!n || n === item.name) return;
+      const r = await apiItem(item.id, "PATCH", { name: n });
+      if (!r.ok) return dialog.alert(r.error || "Rename failed", { title: "Rename" });
       load();
-    } catch (e) {
-      dialog.alert(String(e?.message || e), { title: "Action failed" });
-    }
-  }, [wsId, dialog, state, active, load]);
+    }, [apiItem, load, dialog]),
+    duplicate: useCallback(async (item) => {
+      const copyName = item.name.replace(/(\.[^.]+)?$/, (ext) => ` copy${ext || ""}`);
+      const r = await apiItem(item.id, "POST", { name: copyName });
+      if (!r.ok) return dialog.alert(r.error || "Duplicate failed", { title: "Duplicate" });
+      load();
+    }, [apiItem, load, dialog]),
+    move: useCallback(async (item, toFolderId) => {
+      const r = await apiItem(item.id, "PATCH", { toFolderId: toFolderId || null, fromFolderId: item.folderId || null });
+      if (!r.ok) return dialog.alert(r.error || "Move failed", { title: "Move" });
+      load();
+    }, [apiItem, load, dialog]),
+    remove: useCallback(async (item) => {
+      const r = await apiItem(item.id, "DELETE");
+      if (!r.ok) return dialog.alert(r.error || "Delete failed", { title: "Delete" });
+      if (active?.id === item.id) setActive(null);
+      load();
+    }, [apiItem, load, dialog, active]),
+  };
 
   const resolveImages = useCallback(async (names) => {
     const list = flattenTree(state.tree).images;
@@ -282,7 +280,7 @@ export default function WorkspaceEditor({ params }) {
         onNewDoc={newDoc}
         onUploadImage={uploadImage}
         onCreateFolder={createFolder}
-        onItemAction={itemAction}
+        itemOps={itemOps}
         onResolveImages={resolveImages}
       />
     );

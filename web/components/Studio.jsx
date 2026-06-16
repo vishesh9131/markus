@@ -93,7 +93,7 @@ export default function Studio({
   onNewDoc = null,
   onUploadImage = null,
   onCreateFolder = null,
-  onItemAction = null,
+  itemOps = null,
   onResolveImages = null,
 }) {
   const persistent = Boolean(onSaveDoc);
@@ -120,6 +120,10 @@ export default function Studio({
   const [hintsOpen, setHintsOpen] = useState(true);
   const [railOpen, setRailOpen] = useState(true);
   const [railW, setRailW] = useState(212);
+  const [menu, setMenu] = useState(null); // { item, x, y }
+  const [delConfirm, setDelConfirm] = useState(false);
+  const [renamingId, setRenamingId] = useState(null);
+  const [uploadProg, setUploadProg] = useState(null);
 
   const timer = useRef(null);
   const inflight = useRef(null);
@@ -412,36 +416,81 @@ export default function Studio({
     const file = e.target.files?.[0];
     e.target.value = ""; // allow re-picking the same file
     if (!file || !onUploadImage) return;
+    let last = { loaded: 0, t: Date.now() };
+    setUploadProg({ pct: 0, speed: 0 });
     try {
-      const img = await onUploadImage(file, uploadTargetRef.current);
+      const img = await onUploadImage(file, uploadTargetRef.current, ({ loaded, total }) => {
+        const now = Date.now();
+        const dt = (now - last.t) / 1000;
+        const speed = dt > 0 ? (loaded - last.loaded) / dt : 0;
+        last = { loaded, t: now };
+        setUploadProg({ pct: total ? Math.round((loaded / total) * 100) : 0, speed });
+      });
       if (img?.name) insertAtCursor(`![${baseName(img.name)}](${img.name})`);
     } catch (err) {
       dialog.alert(String(err?.message || err), { title: "Upload failed" });
+    } finally {
+      setUploadProg(null);
     }
   };
 
-  const renderDocLi = (d, folderId = null) => (
-    <li key={d.id} className="rail-row">
-      <button className={`rail-file ${d.id === docId ? "active" : ""}`} onClick={() => d.id !== docId && onOpenDoc && onOpenDoc(d.id)} title={d.name}>
-        <DocGlyph />
-        <span className="rail-file-name">{d.name}</span>
-      </button>
-      {onItemAction && (
-        <button className="rail-act" title="Actions" aria-label="Actions" onClick={() => onItemAction({ id: d.id, name: d.name, type: "doc", folderId })}><DotsGlyph /></button>
-      )}
+  const openMenu = (e, item) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDelConfirm(false);
+    setMenu({ item, x: e.clientX, y: e.clientY });
+  };
+  const commitRename = (item, value) => {
+    setRenamingId(null);
+    const n = (value || "").trim();
+    if (n && n !== item.name) itemOps?.rename(item, n);
+  };
+
+  const renameRow = (item) => (
+    <li key={item.id} className="rail-row">
+      <input
+        className="rail-rename"
+        defaultValue={item.name}
+        autoFocus
+        onFocus={(e) => e.currentTarget.select()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); commitRename(item, e.currentTarget.value); }
+          else if (e.key === "Escape") setRenamingId(null);
+        }}
+        onBlur={(e) => commitRename(item, e.currentTarget.value)}
+      />
     </li>
   );
-  const renderImgLi = (im, folderId = null) => (
-    <li key={im.id} className="rail-row">
-      <button className="rail-file" onClick={() => insertAtCursor(`![${baseName(im.name)}](${im.name})`)} title={`Insert ${im.name}`}>
-        <ImgGlyph />
-        <span className="rail-file-name">{im.name}</span>
-      </button>
-      {onItemAction && (
-        <button className="rail-act" title="Actions" aria-label="Actions" onClick={() => onItemAction({ id: im.id, name: im.name, type: "image", folderId })}><DotsGlyph /></button>
-      )}
-    </li>
-  );
+  const renderDocLi = (d, folderId = null) => {
+    const item = { id: d.id, name: d.name, type: "doc", folderId };
+    if (renamingId === d.id) return renameRow(item);
+    return (
+      <li key={d.id} className="rail-row">
+        <button className={`rail-file ${d.id === docId ? "active" : ""}`} onClick={() => d.id !== docId && onOpenDoc && onOpenDoc(d.id)} title={d.name}>
+          <DocGlyph />
+          <span className="rail-file-name">{d.name}</span>
+        </button>
+        {itemOps && (
+          <button className="rail-act" title="Actions" aria-label="Actions" onClick={(e) => openMenu(e, item)}><DotsGlyph /></button>
+        )}
+      </li>
+    );
+  };
+  const renderImgLi = (im, folderId = null) => {
+    const item = { id: im.id, name: im.name, type: "image", folderId };
+    if (renamingId === im.id) return renameRow(item);
+    return (
+      <li key={im.id} className="rail-row">
+        <button className="rail-file" onClick={() => insertAtCursor(`![${baseName(im.name)}](${im.name})`)} title={`Insert ${im.name}`}>
+          <ImgGlyph />
+          <span className="rail-file-name">{im.name}</span>
+        </button>
+        {itemOps && (
+          <button className="rail-act" title="Actions" aria-label="Actions" onClick={(e) => openMenu(e, item)}><DotsGlyph /></button>
+        )}
+      </li>
+    );
+  };
 
   const download = (kind) => {
     if (kind === "pdf" && pdfData) {
@@ -617,10 +666,24 @@ export default function Studio({
                   <div className="rail-folder" key={fol.id}>
                     <div className="rail-section rail-folder-head">
                       <FolderGlyph />
-                      <span>{fol.name}</span>
+                      {renamingId === fol.id ? (
+                        <input
+                          className="rail-rename rail-rename-folder"
+                          defaultValue={fol.name}
+                          autoFocus
+                          onFocus={(e) => e.currentTarget.select()}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); commitRename({ id: fol.id, name: fol.name, type: "folder", folderId: null }, e.currentTarget.value); }
+                            else if (e.key === "Escape") setRenamingId(null);
+                          }}
+                          onBlur={(e) => commitRename({ id: fol.id, name: fol.name, type: "folder", folderId: null }, e.currentTarget.value)}
+                        />
+                      ) : (
+                        <span>{fol.name}</span>
+                      )}
                       {onNewDoc && <button className="rail-new" onClick={() => onNewDoc(fol.id)} title="New document here" aria-label="New document">+</button>}
                       {onUploadImage && <button className="rail-new" onClick={() => pickImage(fol.id)} title="Upload image here" aria-label="Upload image"><ImgGlyph /></button>}
-                      {onItemAction && <button className="rail-act rail-act-folder" title="Folder actions" aria-label="Folder actions" onClick={() => onItemAction({ id: fol.id, name: fol.name, type: "folder", folderId: null })}><DotsGlyph /></button>}
+                      {itemOps && <button className="rail-act rail-act-folder" title="Folder actions" aria-label="Folder actions" onClick={(e) => openMenu(e, { id: fol.id, name: fol.name, type: "folder", folderId: null })}><DotsGlyph /></button>}
                     </div>
                     <ul className="rail-list rail-nested">
                       {(fol.docs || []).map((d) => renderDocLi(d, fol.id))}
@@ -727,8 +790,61 @@ export default function Studio({
         </div>
         </div>
       </div>
+
+      {menu && (
+        <>
+          <div className="rail-menu-backdrop" onMouseDown={() => setMenu(null)} />
+          <div
+            className="rail-menu"
+            style={{
+              top: Math.min(menu.y, (typeof window !== "undefined" ? window.innerHeight : 800) - 250),
+              left: Math.min(menu.x, (typeof window !== "undefined" ? window.innerWidth : 1000) - 190),
+            }}
+          >
+            <button className="rail-menu-item" onClick={() => { setRenamingId(menu.item.id); setMenu(null); }}>Rename</button>
+            {menu.item.type === "doc" && (
+              <button className="rail-menu-item" onClick={() => { itemOps?.duplicate(menu.item); setMenu(null); }}>Duplicate</button>
+            )}
+            {menu.item.type !== "folder" && ((tree?.folders || []).some((f) => f.id !== menu.item.folderId) || menu.item.folderId) && (
+              <>
+                <div className="rail-menu-label">Move to</div>
+                {menu.item.folderId && (
+                  <button className="rail-menu-item" onClick={() => { itemOps?.move(menu.item, null); setMenu(null); }}>Workspace root</button>
+                )}
+                {(tree?.folders || []).filter((f) => f.id !== menu.item.folderId).map((f) => (
+                  <button key={f.id} className="rail-menu-item" onClick={() => { itemOps?.move(menu.item, f.id); setMenu(null); }}>{f.name}</button>
+                ))}
+              </>
+            )}
+            <div className="rail-menu-sep" />
+            {delConfirm ? (
+              <button className="rail-menu-item danger" onClick={() => { itemOps?.remove(menu.item); setMenu(null); }}>Confirm delete</button>
+            ) : (
+              <button className="rail-menu-item danger" onClick={() => setDelConfirm(true)}>Delete</button>
+            )}
+          </div>
+        </>
+      )}
+
+      {uploadProg && (
+        <div className="upload-toast">
+          <div className="upload-toast-top">
+            <span>Uploading image…</span>
+            <span>{uploadProg.pct}%</span>
+          </div>
+          <div className="upload-bar"><div className="upload-bar-fill" style={{ width: `${uploadProg.pct}%` }} /></div>
+          <div className="upload-toast-sub">{fmtSpeed(uploadProg.speed)}</div>
+        </div>
+      )}
     </div>
   );
+}
+
+function fmtSpeed(bps) {
+  if (!bps || bps < 1) return "starting…";
+  if (bps >= 1048576) return `${(bps / 1048576).toFixed(1)} MB/s`;
+  if (bps >= 1024) return `${(bps / 1024).toFixed(0)} KB/s`;
+  return `${Math.round(bps)} B/s`;
 }
 
 function trigger(href, name) {

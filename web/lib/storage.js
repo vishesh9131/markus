@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { Readable } from "node:stream";
 import { google } from "googleapis";
 
 const ROOT_FOLDER = "Markus Studio";
@@ -419,7 +420,6 @@ class DriveStore {
   }
 
   async uploadImage(wsId, { name, base64, mime, folderId }) {
-    const { Readable } = await import("node:stream");
     const res = await this.drive.files.create({
       requestBody: { name, parents: [folderId || wsId], appProperties: { markusImage: "1" } },
       media: { mimeType: mime || "application/octet-stream", body: Readable.from(Buffer.from(base64, "base64")) },

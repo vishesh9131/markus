@@ -790,6 +790,44 @@ html[data-theme="dark"] .topbar select {
 .rail-row:hover .rail-act, .rail-act:hover, .rail-act:focus { opacity: 1; }
 .rail-act:hover { color: var(--ink); background: var(--surface); }
 .rail-act-folder { margin-left: 0; }
+
+/* inline rename input in the rail */
+.rail-rename {
+  flex: 1; min-width: 0; margin: 1px 2px; padding: 6px 8px;
+  font-family: var(--sans); font-size: 13px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--accent); border-radius: 6px; outline: none;
+}
+.rail-rename-folder { font-size: 12px; }
+
+/* anchored item actions menu (not a full-screen modal) */
+.rail-menu-backdrop { position: fixed; inset: 0; z-index: 60; }
+.rail-menu {
+  position: fixed; z-index: 61; min-width: 170px; max-width: 240px;
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: 10px;
+  padding: 5px; display: flex; flex-direction: column; gap: 1px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18); animation: mk-pop 0.12s ease;
+}
+.rail-menu-item {
+  text-align: left; width: 100%; padding: 8px 10px; border: none; background: none;
+  border-radius: 6px; font-family: var(--sans); font-size: 13px; color: var(--ink); cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rail-menu-item:hover { background: var(--surface-2); }
+.rail-menu-item.danger { color: var(--red); }
+.rail-menu-item.danger:hover { background: var(--errorbar-bg); }
+.rail-menu-label { padding: 6px 10px 3px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-faint); }
+.rail-menu-sep { height: 1px; background: var(--line); margin: 4px 2px; }
+
+/* upload progress toast */
+.upload-toast {
+  position: fixed; right: 20px; bottom: 20px; z-index: 55; width: 240px;
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: 12px;
+  padding: 12px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18); font-family: var(--sans);
+}
+.upload-toast-top { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink); margin-bottom: 8px; }
+.upload-bar { height: 6px; background: var(--line); border-radius: 4px; overflow: hidden; }
+.upload-bar-fill { height: 100%; background: var(--accent); transition: width 0.12s linear; }
+.upload-toast-sub { font-size: 11.5px; color: var(--ink-faint); margin-top: 6px; }
 .rail-file svg { color: var(--ink-faint); }
 .rail-file.active svg { color: var(--ink); }
 .rail-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
