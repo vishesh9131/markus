@@ -1,12 +1,17 @@
 "use client";
 
 import { markdown } from "@codemirror/lang-markdown";
+import { linter, lintGutter } from "@codemirror/lint";
 import CodeMirror, { EditorView } from "@uiw/react-codemirror";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_EXAMPLE, EXAMPLES, TEMPLATES } from "../lib/examples";
 import { getHints } from "../lib/suggest";
+import { mksDiagnostics } from "../lib/mksLint";
+
+// inline diagnostics (squiggles + gutter + hover) — stable module-scope extension
+const MKS_LINT = [linter((view) => mksDiagnostics(view.state.doc.toString())), lintGutter()];
 import { useDialog } from "./Dialog";
 import { Btn } from "./Btn";
 import { exportPdfWithPreference } from "../lib/pdfExport";
@@ -449,7 +454,7 @@ export default function Studio({
               value={source}
               height="100%"
               theme={theme === "dark" ? "dark" : "light"}
-              extensions={[markdown(), theme === "dark" ? markusEditorThemeDark : markusEditorTheme, EditorView.lineWrapping]}
+              extensions={[markdown(), theme === "dark" ? markusEditorThemeDark : markusEditorTheme, EditorView.lineWrapping, ...MKS_LINT]}
               onChange={onChange}
               basicSetup={{ lineNumbers: true, foldGutter: false, highlightActiveLine: true }}
             />
