@@ -67,6 +67,9 @@ export default function Studio({
   docs = null,
   onOpenDoc = null,
   onNewDoc = null,
+  images = null,
+  onUploadImage = null,
+  onResolveImages = null,
 }) {
   const persistent = Boolean(onSaveDoc);
   const [source, setSource] = useState("");
@@ -101,6 +104,9 @@ export default function Studio({
   const pagesRef = useRef(0);
   const dirtyRef = useRef(false);
   const saveRef = useRef(null);
+  const cmViewRef = useRef(null);
+  const resolveImagesRef = useRef(onResolveImages);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     const start =
@@ -145,6 +151,19 @@ export default function Studio({
         reset: opts.reset === true,
       };
       if (!body.source.trim()) return;
+      // forward referenced images so the cross-origin compiler can render them
+      if (resolveImagesRef.current) {
+        const names = [
+          ...new Set(
+            [...body.source.matchAll(/!\[[^\]]*\]\(([^)\s]+)[^)]*\)|\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}/g)]
+              .map((m) => (m[1] || m[2] || "").trim())
+              .filter(Boolean)
+          ),
+        ];
+        if (names.length) {
+          try { body.images = await resolveImagesRef.current(names); } catch { /* render without images */ }
+        }
+      }
       if (inflight.current) inflight.current.abort();
       const ctrl = new AbortController();
       inflight.current = ctrl;
@@ -258,6 +277,10 @@ export default function Studio({
     saveRef.current = save;
   }, [save]);
 
+  useEffect(() => {
+    resolveImagesRef.current = onResolveImages;
+  }, [onResolveImages]);
+
   // cache the rendered first page as a per-device grid thumbnail (debounced).
   // ponytail: localStorage (per device, ~5MB). add server thumbs if cross-device matters.
   useEffect(() => {
@@ -333,6 +356,35 @@ export default function Studio({
       confirmText: `Load the "${t}" template? This replaces the current document text.`,
     });
     if (ok) setTemplate(t);
+  };
+
+  const insertAtCursor = (text) => {
+    const view = cmViewRef.current;
+    if (view) {
+      const sel = view.state.selection.main;
+      view.dispatch({ changes: { from: sel.from, to: sel.to, insert: text }, selection: { anchor: sel.from + text.length } });
+      view.focus();
+      return;
+    }
+    // fallback if the editor view isn't ready: append
+    const ns = `${sourceRef.current}${sourceRef.current.endsWith("\n") ? "" : "\n"}${text}\n`;
+    setSource(ns);
+    sourceRef.current = ns;
+    if (persistent) { setDirty(true); dirtyRef.current = true; }
+    compile({ fast: true });
+  };
+
+  const pickImage = () => fileInputRef.current?.click();
+  const onImageFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!file || !onUploadImage) return;
+    try {
+      const img = await onUploadImage(file);
+      if (img?.name) insertAtCursor(`![${img.name.replace(/\.[^.]+$/, "")}](${img.name})`);
+    } catch (err) {
+      dialog.alert(String(err?.message || err), { title: "Upload failed" });
+    }
   };
 
   const download = (kind) => {
@@ -485,23 +537,48 @@ export default function Studio({
               )}
             </div>
             {railOpen && (
-              <ul className="rail-list">
-                {docs.map((d) => (
-                  <li key={d.id}>
-                    <button
-                      className={`rail-file ${d.id === docId ? "active" : ""}`}
-                      onClick={() => d.id !== docId && onOpenDoc && onOpenDoc(d.id)}
-                      title={d.name}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                        <path d="M4 1.6h5L12.4 5v9.4a.5.5 0 0 1-.5.5H4a.5.5 0 0 1-.5-.5V2.1c0-.3.2-.5.5-.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-                        <path d="M8.8 1.8V5h3.2" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-                      </svg>
-                      <span className="rail-file-name">{d.name}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <div className="rail-scroll">
+                <ul className="rail-list">
+                  {docs.map((d) => (
+                    <li key={d.id}>
+                      <button
+                        className={`rail-file ${d.id === docId ? "active" : ""}`}
+                        onClick={() => d.id !== docId && onOpenDoc && onOpenDoc(d.id)}
+                        title={d.name}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <path d="M4 1.6h5L12.4 5v9.4a.5.5 0 0 1-.5.5H4a.5.5 0 0 1-.5-.5V2.1c0-.3.2-.5.5-.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                          <path d="M8.8 1.8V5h3.2" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                        </svg>
+                        <span className="rail-file-name">{d.name}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="rail-section">
+                  <span>Images</span>
+                  {onUploadImage && (
+                    <button className="rail-new" onClick={pickImage} title="Upload image" aria-label="Upload image">+</button>
+                  )}
+                </div>
+                <ul className="rail-list">
+                  {(images || []).map((im) => (
+                    <li key={im.id}>
+                      <button className="rail-file" onClick={() => insertAtCursor(`![${im.name.replace(/\.[^.]+$/, "")}](${im.name})`)} title={`Insert ${im.name}`}>
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+                          <circle cx="5.5" cy="6.5" r="1" fill="currentColor" />
+                          <path d="M3 12l3.5-3.5 2.5 2.5L11 9l2 2" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinejoin="round" />
+                        </svg>
+                        <span className="rail-file-name">{im.name}</span>
+                      </button>
+                    </li>
+                  ))}
+                  {(!images || images.length === 0) && <li className="rail-empty">No images yet</li>}
+                </ul>
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={onImageFile} style={{ display: "none" }} />
+              </div>
             )}
           </div>
         )}
@@ -514,6 +591,7 @@ export default function Studio({
               theme={theme === "dark" ? "dark" : "light"}
               extensions={[markdown(), theme === "dark" ? markusEditorThemeDark : markusEditorTheme, EditorView.lineWrapping, ...MKS_LINT]}
               onChange={onChange}
+              onCreateEditor={(view) => { cmViewRef.current = view; }}
               basicSetup={{ lineNumbers: true, foldGutter: false, highlightActiveLine: true }}
             />
           </div>

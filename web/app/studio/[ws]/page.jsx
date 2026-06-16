@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import Studio from "../../../components/Studio";
 import Loader from "../../../components/Loader";
 import GrantDrive from "../../../components/GrantDrive";
@@ -149,6 +149,40 @@ export default function WorkspaceEditor({ params }) {
     catch (e) { if (e.message !== "cancelled") dialog.alert(e.message, { title: "Upgrade" }); }
   }, [state, load, dialog]);
 
+  // ---- images: upload to Drive, and resolve referenced images to base64 so the
+  // cross-origin compiler can render them (cached per name to avoid refetching).
+  const imageCache = useRef({});
+  const uploadImage = useCallback(async (file) => {
+    const base64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result).split(",")[1] || "");
+      r.onerror = () => rej(new Error("Could not read file"));
+      r.readAsDataURL(file);
+    });
+    const res = await fetch(`/api/workspaces/${wsId}/images`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: file.name, mime: file.type, base64 }),
+    }).then((r) => r.json());
+    if (!res.ok) throw new Error(res.error || "Upload failed");
+    imageCache.current[res.image.name] = base64;
+    load(); // refresh so the rail shows the new image
+    return res.image;
+  }, [wsId, load]);
+
+  const resolveImages = useCallback(async (names) => {
+    const list = state.ws?.images || [];
+    const out = [];
+    for (const name of names) {
+      if (imageCache.current[name]) { out.push({ name, base64: imageCache.current[name] }); continue; }
+      const img = list.find((i) => i.name === name);
+      if (!img) continue;
+      const r = await fetch(`/api/workspaces/${wsId}/images/${img.id}`).then((x) => x.json()).catch(() => null);
+      if (r?.ok) { imageCache.current[name] = r.base64; out.push({ name, base64: r.base64 }); }
+    }
+    return out;
+  }, [wsId, state]);
+
   if (state.status === "loading") return <div className="dash"><Loader label="Opening workspace…" /></div>;
   if (state.status === "drive") return <div className="dash"><GrantDrive /></div>;
   if (state.status === "relogin") return <div className="dash"><GrantDrive reason="relogin" /></div>;
@@ -171,6 +205,9 @@ export default function WorkspaceEditor({ params }) {
         docs={ws.docs}
         onOpenDoc={openDoc}
         onNewDoc={newDoc}
+        images={ws.images || []}
+        onUploadImage={uploadImage}
+        onResolveImages={resolveImages}
       />
     );
   }

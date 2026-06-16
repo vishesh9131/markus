@@ -226,6 +226,21 @@ export async function POST(request) {
       const p = path.join(work, name);
       if (!existsSync(p)) await writeFile(p, content);
     }
+    // user images forwarded by the browser (the cross-origin compiler can't read
+    // the user's Drive). Names are reduced to a safe basename in the work dir.
+    if (Array.isArray(body.images)) {
+      for (const img of body.images.slice(0, 25)) {
+        if (!img || typeof img.name !== "string" || typeof img.base64 !== "string") continue;
+        const base = path.basename(img.name).replace(/[^\w.\-]/g, "_");
+        if (!base) continue;
+        try {
+          const buf = Buffer.from(img.base64, "base64");
+          if (buf.length <= 8 * 1024 * 1024) await writeFile(path.join(work, base), buf);
+        } catch {
+          /* skip a bad image rather than fail the build */
+        }
+      }
+    }
 
     const args = ["build", src, "-o", outDir];
     if (template) args.push("-t", template);

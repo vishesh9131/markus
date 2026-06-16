@@ -52,13 +52,47 @@ class LocalStore {
     await fs.writeFile(path.join(this.dir, wsId, "docs.json"), JSON.stringify(docs, null, 2));
   }
 
+  async _images(wsId) {
+    try {
+      return JSON.parse(await fs.readFile(path.join(this.dir, wsId, "images.json"), "utf8"));
+    } catch {
+      return [];
+    }
+  }
+
+  async _writeImages(wsId, imgs) {
+    await fs.mkdir(path.join(this.dir, wsId), { recursive: true });
+    await fs.writeFile(path.join(this.dir, wsId, "images.json"), JSON.stringify(imgs, null, 2));
+  }
+
   async listWorkspaces() {
     const idx = await this._index();
     const out = [];
     for (const ws of idx.workspaces) {
-      out.push({ ...ws, docs: await this._docs(ws.id) });
+      out.push({ ...ws, docs: await this._docs(ws.id), images: await this._images(ws.id) });
     }
     return out;
+  }
+
+  async uploadImage(wsId, { name, base64, mime }) {
+    const imgs = await this._images(wsId);
+    const meta = { id: randomUUID(), name, mime, updatedAt: new Date().toISOString() };
+    imgs.push(meta);
+    await this._writeImages(wsId, imgs);
+    await fs.writeFile(path.join(this.dir, wsId, `img_${meta.id}`), Buffer.from(base64, "base64"));
+    return meta;
+  }
+
+  async getImage(wsId, imgId) {
+    const meta = (await this._images(wsId)).find((i) => i.id === imgId);
+    if (!meta) return null;
+    let base64 = "";
+    try {
+      base64 = (await fs.readFile(path.join(this.dir, wsId, `img_${imgId}`))).toString("base64");
+    } catch {
+      /* empty */
+    }
+    return { ...meta, base64 };
   }
 
   async createWorkspace(name) {
@@ -182,15 +216,23 @@ class DriveStore {
     for (const f of folders) {
       const files = await this._listAll({
         q: `'${f.id}' in parents and trashed=false`,
-        fields: "files(id,name,modifiedTime,appProperties)",
+        fields: "files(id,name,mimeType,modifiedTime,appProperties)",
       });
-      const docs = files.map((d) => ({
-        id: d.id,
-        name: d.name,
-        pages: d.appProperties?.pages ? Number(d.appProperties.pages) : undefined,
-        updatedAt: d.modifiedTime,
-      }));
-      out.push({ id: f.id, name: f.name, createdAt: f.createdTime, docs });
+      const docs = [];
+      const images = [];
+      for (const d of files) {
+        if ((d.mimeType || "").startsWith("image/")) {
+          images.push({ id: d.id, name: d.name, mime: d.mimeType, updatedAt: d.modifiedTime });
+        } else {
+          docs.push({
+            id: d.id,
+            name: d.name,
+            pages: d.appProperties?.pages ? Number(d.appProperties.pages) : undefined,
+            updatedAt: d.modifiedTime,
+          });
+        }
+      }
+      out.push({ id: f.id, name: f.name, createdAt: f.createdTime, docs, images });
     }
     return out;
   }
@@ -249,6 +291,27 @@ class DriveStore {
       fields: "id,name,modifiedTime,appProperties",
     });
     return { id: res.data.id, name: res.data.name, pages, updatedAt: res.data.modifiedTime };
+  }
+
+  async uploadImage(wsId, { name, base64, mime }) {
+    const { Readable } = await import("node:stream");
+    const res = await this.drive.files.create({
+      requestBody: { name, parents: [wsId], appProperties: { markusImage: "1" } },
+      media: { mimeType: mime || "application/octet-stream", body: Readable.from(Buffer.from(base64, "base64")) },
+      fields: "id,name,mimeType,modifiedTime",
+    });
+    return { id: res.data.id, name: res.data.name, mime: res.data.mimeType, updatedAt: res.data.modifiedTime };
+  }
+
+  async getImage(_wsId, imgId) {
+    const meta = await this.drive.files.get({ fileId: imgId, fields: "id,name,mimeType" });
+    const media = await this.drive.files.get({ fileId: imgId, alt: "media" }, { responseType: "arraybuffer" });
+    return {
+      id: imgId,
+      name: meta.data.name,
+      mime: meta.data.mimeType,
+      base64: Buffer.from(media.data).toString("base64"),
+    };
   }
 
   // subscription state lives in an app-created file in the user's Drive,
