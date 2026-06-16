@@ -122,6 +122,7 @@ export default function WorkspaceEditor({ params }) {
       }).then((r) => r.json());
       if (!res.ok) return dialog.alert(res.error || "Couldn’t create the document.", { title: "New document" });
       setActive({ id: res.doc.id, name: res.doc.name, content: STARTER });
+      load(); // refresh so the new file shows in the rail
     } catch {
       dialog.alert("Network error — please try again.", { title: "New document" });
     } finally {
@@ -129,21 +130,18 @@ export default function WorkspaceEditor({ params }) {
     }
   };
 
+  // id/name come from the editor itself, so switching docs can't save content
+  // to the wrong file. Docs are created server-side first, so id is always set.
   const saveDoc = useCallback(
-    async ({ content, pages }) => {
+    async ({ id, name, content, pages }) => {
       const res = await fetch(`/api/workspaces/${wsId}/docs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: active?.id || undefined, name: active?.name, content, pages }),
+        body: JSON.stringify({ id: id || undefined, name, content, pages }),
       }).then((r) => r.json());
-      if (!res.ok) {
-        // surface quota errors clearly
-        throw new Error(res.error || "Save failed");
-      }
-      // capture server id for new docs so future saves update in place
-      setActive((a) => (a ? { ...a, id: res.doc.id } : a));
+      if (!res.ok) throw new Error(res.error || "Save failed"); // surfaces quota errors
     },
-    [wsId, active]
+    [wsId]
   );
 
   const upgrade = useCallback(async () => {
@@ -161,6 +159,7 @@ export default function WorkspaceEditor({ params }) {
   if (active) {
     return (
       <Studio
+        key={active.id}
         initialDoc={active.content}
         docName={active.name}
         docId={active.id}
@@ -169,6 +168,9 @@ export default function WorkspaceEditor({ params }) {
         plan={account.tier}
         onSaveDoc={saveDoc}
         onUpgrade={upgrade}
+        docs={ws.docs}
+        onOpenDoc={openDoc}
+        onNewDoc={newDoc}
       />
     );
   }

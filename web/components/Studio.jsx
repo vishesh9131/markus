@@ -6,7 +6,7 @@ import CodeMirror, { EditorView } from "@uiw/react-codemirror";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DEFAULT_EXAMPLE, EXAMPLES, TEMPLATES } from "../lib/examples";
+import { DEFAULT_EXAMPLE, EXAMPLES, TEMPLATES, starterFor } from "../lib/examples";
 import { getHints } from "../lib/suggest";
 import { mksDiagnostics } from "../lib/mksLint";
 
@@ -64,6 +64,9 @@ export default function Studio({
   plan = "free",
   onSaveDoc = null,
   onUpgrade = null,
+  docs = null,
+  onOpenDoc = null,
+  onNewDoc = null,
 }) {
   const persistent = Boolean(onSaveDoc);
   const [source, setSource] = useState("");
@@ -87,6 +90,7 @@ export default function Studio({
   const [dirty, setDirty] = useState(false);
   const [waking, setWaking] = useState(false);
   const [hintsOpen, setHintsOpen] = useState(true);
+  const [railOpen, setRailOpen] = useState(true);
 
   const timer = useRef(null);
   const inflight = useRef(null);
@@ -221,7 +225,8 @@ export default function Studio({
     const snapshot = sourceRef.current;
     setSaving(true);
     try {
-      await onSaveDoc({ content: snapshot, pages: pagesRef.current });
+      // pass this editor's own id/name so a doc switch can't save to the wrong file
+      await onSaveDoc({ content: snapshot, pages: pagesRef.current, id: docId, name: docName });
       setSavedAt(Date.now());
       // only mark clean if nothing was typed while the save was in flight
       if (sourceRef.current === snapshot) {
@@ -233,7 +238,7 @@ export default function Studio({
     } finally {
       setSaving(false);
     }
-  }, [onSaveDoc, saving]);
+  }, [onSaveDoc, saving, docId, docName]);
 
   // Cmd/Ctrl+S to save
   useEffect(() => {
@@ -296,19 +301,38 @@ export default function Studio({
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [persistent]);
 
-  const loadExample = (name) => {
-    setExample(name);
-    const doc = EXAMPLES[name];
-    setSource(doc);
-    sourceRef.current = doc;
+  // Replace the editor content, but confirm first if there's work to lose.
+  const loadDoc = async (content, { confirmTitle, confirmText }) => {
+    if (sourceRef.current.trim() && content !== sourceRef.current) {
+      const ok = await dialog.confirm(confirmText, { title: confirmTitle, okText: "Load" });
+      if (!ok) return false;
+    }
+    setSource(content);
+    sourceRef.current = content;
     if (persistent) { setDirty(true); dirtyRef.current = true; }
-    else window.localStorage.setItem(STORAGE_KEY, doc);
+    else window.localStorage.setItem(STORAGE_KEY, content);
     compile({ fast: true, reset: true });
+    return true;
   };
 
-  const changeTemplate = (t) => {
-    setTemplate(t);
-    compile({ template: t, fast: true, reset: true });
+  const loadExample = async (name) => {
+    const ok = await loadDoc(EXAMPLES[name], {
+      confirmTitle: "Load example",
+      confirmText: `Load the "${name}" example? This replaces the current document text.`,
+    });
+    if (ok) setExample(name);
+  };
+
+  // Picking a template loads that template's starter content (not just a
+  // render-only override), so the .mks updates too.
+  const changeTemplate = async (t) => {
+    if (!t) return;
+    const starter = starterFor(t);
+    const ok = await loadDoc(starter, {
+      confirmTitle: "Start from template",
+      confirmText: `Load the "${t}" template? This replaces the current document text.`,
+    });
+    if (ok) setTemplate(t);
   };
 
   const download = (kind) => {
@@ -447,6 +471,40 @@ export default function Studio({
       </div>
 
       <div className="main">
+        {persistent && Array.isArray(docs) && (
+          <div className={`file-rail ${railOpen ? "open" : "closed"}`}>
+            <div className="file-rail-head">
+              <button className="rail-toggle" onClick={() => setRailOpen((o) => !o)} title={railOpen ? "Hide files" : "Show files"} aria-label="Toggle files">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M2 3.2h4l1.3 1.4H14V13H2z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {railOpen && <span className="rail-title">{workspaceName || "Files"}</span>}
+              {railOpen && onNewDoc && (
+                <button className="rail-new" onClick={onNewDoc} title="New document" aria-label="New document">+</button>
+              )}
+            </div>
+            {railOpen && (
+              <ul className="rail-list">
+                {docs.map((d) => (
+                  <li key={d.id}>
+                    <button
+                      className={`rail-file ${d.id === docId ? "active" : ""}`}
+                      onClick={() => d.id !== docId && onOpenDoc && onOpenDoc(d.id)}
+                      title={d.name}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <path d="M4 1.6h5L12.4 5v9.4a.5.5 0 0 1-.5.5H4a.5.5 0 0 1-.5-.5V2.1c0-.3.2-.5.5-.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                        <path d="M8.8 1.8V5h3.2" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                      </svg>
+                      <span className="rail-file-name">{d.name}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
         <div className="pane editor-pane" style={{ flexBasis: `${split}%`, flexGrow: 0, flexShrink: 0 }}>
           <div className="pane-head">source · .mks</div>
           <div className="editor-wrap">

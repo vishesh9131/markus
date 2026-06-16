@@ -746,6 +746,30 @@ html[data-theme="dark"] .topbar select {
 }
 .legal-prose pre code { background: none; border: none; padding: 0; font-size: inherit; }
 
+/* file rail (Overleaf-style file list inside the editor) */
+.file-rail { flex: 0 0 212px; display: flex; flex-direction: column; min-width: 0; background: var(--surface-2); border-right: 1px solid var(--line); }
+.file-rail.closed { flex-basis: 40px; }
+.file-rail-head { display: flex; align-items: center; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); }
+.rail-toggle, .rail-new {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; flex-shrink: 0; border: 1px solid transparent; border-radius: 6px;
+  background: none; color: var(--ink-soft); cursor: pointer; font-size: 18px; line-height: 1;
+}
+.rail-toggle:hover, .rail-new:hover { color: var(--ink); border-color: var(--line-strong); background: var(--surface); }
+.rail-title { flex: 1; font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rail-list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.rail-file { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 8px; border: none; border-radius: 6px; background: none; cursor: pointer; font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: left; }
+.rail-file:hover { background: var(--surface); color: var(--ink); }
+.rail-file.active { background: var(--surface); color: var(--ink); font-weight: 600; }
+.rail-file svg { color: var(--ink-faint); }
+.rail-file.active svg { color: var(--ink); }
+.rail-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 760px) {
+  .file-rail { flex: 0 0 auto; max-height: 132px; border-right: none; border-bottom: 1px solid var(--line); }
+  .file-rail.closed { flex-basis: auto; max-height: 40px; }
+  .rail-list { max-height: 92px; }
+}
+
 /* live suggestions panel (editor pane) */
 .hints { flex: 0 0 auto; border-top: 1px solid var(--line); background: var(--surface-2); }
 .hints-head {

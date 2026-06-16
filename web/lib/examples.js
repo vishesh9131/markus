@@ -221,3 +221,15 @@ export const TEMPLATES = [
   "nature",
   "apa",
 ];
+
+// Starter document for a template id: reuse the matching example if one exists,
+// otherwise a minimal stub. Used so picking a template loads real .mks content,
+// not just a render-only class override.
+export function starterFor(template) {
+  const t = (template || "").trim();
+  if (!t) return null;
+  for (const src of Object.values(EXAMPLES)) {
+    if (new RegExp(`^template:\\s*${t}(\\b|$)`, "m").test(src)) return src;
+  }
+  return `---\ntitle: Untitled\ntemplate: ${t}\n---\n\n# Introduction\n\nStart writing here.\n`;
+}
