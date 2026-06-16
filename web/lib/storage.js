@@ -124,6 +124,72 @@ class LocalStore {
     };
   }
 
+  async _writeFolders(wsId, f) {
+    await fs.mkdir(path.join(this.dir, wsId), { recursive: true });
+    await fs.writeFile(path.join(this.dir, wsId, "folders.json"), JSON.stringify(f, null, 2));
+  }
+
+  async rename(wsId, id, name) {
+    const docs = await this._docs(wsId);
+    const d = docs.find((x) => x.id === id);
+    if (d) { d.name = name; await this._writeDocs(wsId, docs); return { id, name }; }
+    const imgs = await this._images(wsId);
+    const im = imgs.find((x) => x.id === id);
+    if (im) { im.name = name; await this._writeImages(wsId, imgs); return { id, name }; }
+    const fols = await this._folders(wsId);
+    const fo = fols.find((x) => x.id === id);
+    if (fo) { fo.name = name; await this._writeFolders(wsId, fols); return { id, name }; }
+    return { id, name };
+  }
+
+  async move(wsId, id, toFolderId) {
+    const folderId = toFolderId || null;
+    const docs = await this._docs(wsId);
+    const d = docs.find((x) => x.id === id);
+    if (d) { d.folderId = folderId; await this._writeDocs(wsId, docs); return; }
+    const imgs = await this._images(wsId);
+    const im = imgs.find((x) => x.id === id);
+    if (im) { im.folderId = folderId; await this._writeImages(wsId, imgs); }
+  }
+
+  async remove(wsId, id) {
+    const docs = await this._docs(wsId);
+    if (docs.some((x) => x.id === id)) {
+      await this._writeDocs(wsId, docs.filter((x) => x.id !== id));
+      await fs.rm(path.join(this.dir, wsId, `${id}.mks`), { force: true });
+      return;
+    }
+    const imgs = await this._images(wsId);
+    if (imgs.some((x) => x.id === id)) {
+      await this._writeImages(wsId, imgs.filter((x) => x.id !== id));
+      await fs.rm(path.join(this.dir, wsId, `img_${id}`), { force: true });
+      return;
+    }
+    const fols = await this._folders(wsId);
+    if (fols.some((x) => x.id === id)) {
+      await this._writeFolders(wsId, fols.filter((x) => x.id !== id));
+      const keptDocs = [];
+      for (const d of docs) {
+        if (d.folderId === id) await fs.rm(path.join(this.dir, wsId, `${d.id}.mks`), { force: true });
+        else keptDocs.push(d);
+      }
+      await this._writeDocs(wsId, keptDocs);
+      const keptImgs = [];
+      for (const im of imgs) {
+        if (im.folderId === id) await fs.rm(path.join(this.dir, wsId, `img_${im.id}`), { force: true });
+        else keptImgs.push(im);
+      }
+      await this._writeImages(wsId, keptImgs);
+    }
+  }
+
+  async duplicate(wsId, id, name) {
+    const doc = await this.getDoc(wsId, id);
+    if (!doc) return null;
+    const meta = await this.saveDoc(wsId, { name, content: doc.content, pages: doc.pages, folderId: doc.folderId || null });
+    return { id: meta.id, name: meta.name };
+  }
+
   async createWorkspace(name) {
     const idx = await this._index();
     const ws = { id: randomUUID(), name, createdAt: new Date().toISOString() };
@@ -371,6 +437,30 @@ class DriveStore {
       mime: meta.data.mimeType,
       base64: Buffer.from(media.data).toString("base64"),
     };
+  }
+
+  // ---- item operations (work on any file/folder by Drive id) ----
+  async rename(_wsId, id, name) {
+    const r = await this.drive.files.update({ fileId: id, requestBody: { name }, fields: "id,name" });
+    return { id: r.data.id, name: r.data.name };
+  }
+
+  async remove(_wsId, id) {
+    await this.drive.files.delete({ fileId: id }); // folders cascade
+  }
+
+  async move(wsId, id, toFolderId, fromFolderId) {
+    await this.drive.files.update({
+      fileId: id,
+      addParents: toFolderId || wsId,
+      removeParents: fromFolderId || wsId,
+      fields: "id",
+    });
+  }
+
+  async duplicate(_wsId, id, name) {
+    const r = await this.drive.files.copy({ fileId: id, requestBody: { name }, fields: "id,name,modifiedTime" });
+    return { id: r.data.id, name: r.data.name };
   }
 
   // subscription state lives in an app-created file in the user's Drive,

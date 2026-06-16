@@ -770,6 +770,16 @@ html[data-theme="dark"] .topbar select {
 .rail-file { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 8px; border: none; border-radius: 6px; background: none; cursor: pointer; font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: left; }
 .rail-file:hover { background: var(--surface); color: var(--ink); }
 .rail-file.active { background: var(--surface); color: var(--ink); font-weight: 600; }
+.rail-row { display: flex; align-items: center; gap: 1px; }
+.rail-row .rail-file { flex: 1; min-width: 0; }
+.rail-act {
+  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 28px; border: none; background: none; border-radius: 6px;
+  color: var(--ink-faint); cursor: pointer; opacity: 0.4;
+}
+.rail-row:hover .rail-act, .rail-act:hover, .rail-act:focus { opacity: 1; }
+.rail-act:hover { color: var(--ink); background: var(--surface); }
+.rail-act-folder { margin-left: 0; }
 .rail-file svg { color: var(--ink-faint); }
 .rail-file.active svg { color: var(--ink); }
 .rail-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -36,6 +36,11 @@ const FolderGlyph = () => (
     <path d="M1.6 4.4h4.2l1.2 1.3h7.4v7.5H1.6z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
   </svg>
 );
+const DotsGlyph = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <circle cx="3.5" cy="8" r="1.3" /><circle cx="8" cy="8" r="1.3" /><circle cx="12.5" cy="8" r="1.3" />
+  </svg>
+);
 
 const DEBOUNCE_MS = 350;
 const AUTOSAVE_MS = 1200;
@@ -88,6 +93,7 @@ export default function Studio({
   onNewDoc = null,
   onUploadImage = null,
   onCreateFolder = null,
+  onItemAction = null,
   onResolveImages = null,
 }) {
   const persistent = Boolean(onSaveDoc);
@@ -411,20 +417,26 @@ export default function Studio({
     }
   };
 
-  const renderDocLi = (d) => (
-    <li key={d.id}>
+  const renderDocLi = (d, folderId = null) => (
+    <li key={d.id} className="rail-row">
       <button className={`rail-file ${d.id === docId ? "active" : ""}`} onClick={() => d.id !== docId && onOpenDoc && onOpenDoc(d.id)} title={d.name}>
         <DocGlyph />
         <span className="rail-file-name">{d.name}</span>
       </button>
+      {onItemAction && (
+        <button className="rail-act" title="Actions" aria-label="Actions" onClick={() => onItemAction({ id: d.id, name: d.name, type: "doc", folderId })}><DotsGlyph /></button>
+      )}
     </li>
   );
-  const renderImgLi = (im) => (
-    <li key={im.id}>
+  const renderImgLi = (im, folderId = null) => (
+    <li key={im.id} className="rail-row">
       <button className="rail-file" onClick={() => insertAtCursor(`![${baseName(im.name)}](${im.name})`)} title={`Insert ${im.name}`}>
         <ImgGlyph />
         <span className="rail-file-name">{im.name}</span>
       </button>
+      {onItemAction && (
+        <button className="rail-act" title="Actions" aria-label="Actions" onClick={() => onItemAction({ id: im.id, name: im.name, type: "image", folderId })}><DotsGlyph /></button>
+      )}
     </li>
   );
 
@@ -582,7 +594,7 @@ export default function Studio({
             </div>
             {railOpen && (
               <div className="rail-scroll">
-                <ul className="rail-list">{(tree.docs || []).map(renderDocLi)}</ul>
+                <ul className="rail-list">{(tree.docs || []).map((d) => renderDocLi(d, null))}</ul>
 
                 {(tree.folders || []).map((fol) => (
                   <div className="rail-folder" key={fol.id}>
@@ -591,10 +603,11 @@ export default function Studio({
                       <span>{fol.name}</span>
                       {onNewDoc && <button className="rail-new" onClick={() => onNewDoc(fol.id)} title="New document here" aria-label="New document">+</button>}
                       {onUploadImage && <button className="rail-new" onClick={() => pickImage(fol.id)} title="Upload image here" aria-label="Upload image"><ImgGlyph /></button>}
+                      {onItemAction && <button className="rail-act rail-act-folder" title="Folder actions" aria-label="Folder actions" onClick={() => onItemAction({ id: fol.id, name: fol.name, type: "folder", folderId: null })}><DotsGlyph /></button>}
                     </div>
                     <ul className="rail-list rail-nested">
-                      {(fol.docs || []).map(renderDocLi)}
-                      {(fol.images || []).map(renderImgLi)}
+                      {(fol.docs || []).map((d) => renderDocLi(d, fol.id))}
+                      {(fol.images || []).map((im) => renderImgLi(im, fol.id))}
                       {(fol.docs || []).length === 0 && (fol.images || []).length === 0 && <li className="rail-empty">empty</li>}
                     </ul>
                   </div>
@@ -605,7 +618,7 @@ export default function Studio({
                   {onUploadImage && <button className="rail-new" onClick={() => pickImage(null)} title="Upload image" aria-label="Upload image">+</button>}
                 </div>
                 <ul className="rail-list">
-                  {(tree.images || []).map(renderImgLi)}
+                  {(tree.images || []).map((im) => renderImgLi(im, null))}
                   {(tree.images || []).length === 0 && <li className="rail-empty">No images yet</li>}
                 </ul>
 

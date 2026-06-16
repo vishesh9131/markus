@@ -195,6 +195,56 @@ export default function WorkspaceEditor({ params }) {
     load();
   }, [wsId, load, dialog]);
 
+  // Rename / Duplicate / Move / Delete for a tree item, via the shared dialog.
+  const itemAction = useCallback(async (item) => {
+    const opts = [{ label: "Rename", value: "rename" }];
+    if (item.type === "doc") opts.push({ label: "Duplicate", value: "duplicate" });
+    if (item.type !== "folder") opts.push({ label: "Move to…", value: "move" });
+    opts.push({ label: "Delete", value: "delete" });
+    const action = await dialog.choose(item.name, { title: item.type === "folder" ? "Folder" : "File", options: opts });
+    if (!action) return;
+    const base = `/api/workspaces/${wsId}/items/${item.id}`;
+    const json = (method, body) =>
+      fetch(base, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined }).then((r) => r.json());
+
+    try {
+      if (action === "rename") {
+        const raw = await dialog.prompt("New name", { title: "Rename", defaultValue: item.name });
+        const name = (raw || "").trim();
+        if (!name || name === item.name) return;
+        const r = await json("PATCH", { name });
+        if (!r.ok) throw new Error(r.error);
+      } else if (action === "duplicate") {
+        const copyName = item.name.replace(/(\.[^.]+)?$/, (ext) => ` copy${ext || ""}`);
+        const r = await json("POST", { name: copyName });
+        if (!r.ok) throw new Error(r.error);
+      } else if (action === "move") {
+        const folders = (state.tree?.folders || []).filter((f) => f.id !== item.folderId);
+        const targets = [
+          ...(item.folderId ? [{ label: "Workspace root", value: "__root__" }] : []),
+          ...folders.map((f) => ({ label: f.name, value: f.id })),
+        ];
+        if (targets.length === 0) return dialog.alert("Create a folder first to move files into.", { title: "Move" });
+        const to = await dialog.choose(`Move "${item.name}" to`, { title: "Move", options: targets });
+        if (!to) return;
+        const r = await json("PATCH", { toFolderId: to === "__root__" ? null : to, fromFolderId: item.folderId || null });
+        if (!r.ok) throw new Error(r.error);
+      } else if (action === "delete") {
+        const msg = item.type === "folder"
+          ? `Delete folder “${item.name}” and everything inside it? This can’t be undone.`
+          : `Delete “${item.name}”? This can’t be undone.`;
+        const ok = await dialog.confirm(msg, { title: "Delete", okText: "Delete", danger: true });
+        if (!ok) return;
+        const r = await json("DELETE");
+        if (!r.ok) throw new Error(r.error);
+        if (active?.id === item.id) setActive(null); // deleted the open doc -> back to chooser
+      }
+      load();
+    } catch (e) {
+      dialog.alert(String(e?.message || e), { title: "Action failed" });
+    }
+  }, [wsId, dialog, state, active, load]);
+
   const resolveImages = useCallback(async (names) => {
     const list = flattenTree(state.tree).images;
     const out = [];
@@ -232,6 +282,7 @@ export default function WorkspaceEditor({ params }) {
         onNewDoc={newDoc}
         onUploadImage={uploadImage}
         onCreateFolder={createFolder}
+        onItemAction={itemAction}
         onResolveImages={resolveImages}
       />
     );
