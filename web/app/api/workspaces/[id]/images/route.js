@@ -19,13 +19,13 @@ export async function POST(request, { params }) {
   if (rl) return rl;
   try {
     const { id: wsId } = await params;
-    const { name, base64, mime } = await request.json().catch(() => ({}));
+    const { name, base64, mime, folderId } = await request.json().catch(() => ({}));
     if (!name || !base64) return Response.json({ ok: false, error: "Missing image data" }, { status: 400 });
     if (!/^image\//.test(mime || "")) return Response.json({ ok: false, error: "Only image files are allowed" }, { status: 400 });
     if (base64.length * 0.75 > MAX_IMAGE_BYTES) return Response.json({ ok: false, error: "Image too large (max 4 MB)" }, { status: 413 });
     const safe = name.replace(/[^\w.\-]/g, "_").slice(0, 80) || "image.png";
     const store = getStore(session);
-    const image = await store.uploadImage(wsId, { name: safe, base64, mime });
+    const image = await store.uploadImage(wsId, { name: safe, base64, mime, folderId });
     return Response.json({ ok: true, image });
   } catch (e) {
     return errorResponse(e);

@@ -24,7 +24,7 @@ export async function POST(request, { params }) {
     const limits = limitsFor(account.tier);
 
     const body = await request.json().catch(() => ({}));
-    const { id, name, content, pages } = body;
+    const { id, name, content, pages, folderId } = body;
 
     const all = await store.listWorkspaces();
     const ws = all.find((w) => w.id === wsId);
@@ -49,7 +49,7 @@ export async function POST(request, { params }) {
       Number.isFinite(limits.pagesPerDoc) &&
       pages > limits.pagesPerDoc;
 
-    const doc = await store.saveDoc(wsId, { id, name, content, pages });
+    const doc = await store.saveDoc(wsId, { id, name, content, pages, folderId });
     return Response.json({
       ok: true,
       doc,

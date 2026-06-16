@@ -33,6 +33,16 @@ Start writing here. Inline math like $E = mc^2$, **bold**, and lists:
 - second point
 `;
 
+function flattenTree(tree) {
+  const docs = [...(tree?.docs || [])];
+  const images = [...(tree?.images || [])];
+  for (const f of tree?.folders || []) {
+    docs.push(...(f.docs || []));
+    images.push(...(f.images || []));
+  }
+  return { docs, images };
+}
+
 function timeAgo(iso) {
   const then = Date.parse(iso || "");
   if (!then) return "recently";
@@ -71,7 +81,9 @@ export default function WorkspaceEditor({ params }) {
       }
       const ws = j.workspaces.find((w) => w.id === wsId);
       if (!ws) return setState({ status: "error", error: "Workspace not found" });
-      setState({ status: "ready", ws, account: j.account, limits: j.limits, user: j.user });
+      const tr = await fetch(`/api/workspaces/${wsId}/tree`).then((r) => r.json()).catch(() => null);
+      const tree = tr?.ok ? tr.tree : { docs: ws.docs || [], images: ws.images || [], folders: [] };
+      setState({ status: "ready", ws, tree, account: j.account, limits: j.limits, user: j.user });
     } catch {
       setState({ status: "error", error: "Network error — try again." });
     }
@@ -94,7 +106,7 @@ export default function WorkspaceEditor({ params }) {
     }
   };
 
-  const newDoc = async () => {
+  const newDoc = async (folderId = null) => {
     const { ws, account, limits } = state;
     if (account.tier !== "premium" && ws.docs.length >= limits.docsPerWorkspace) {
       const go = await dialog.confirm(
@@ -118,7 +130,7 @@ export default function WorkspaceEditor({ params }) {
       const res = await fetch(`/api/workspaces/${wsId}/docs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: docName, content: STARTER, pages: 0 }),
+        body: JSON.stringify({ name: docName, content: STARTER, pages: 0, folderId }),
       }).then((r) => r.json());
       if (!res.ok) return dialog.alert(res.error || "Couldn’t create the document.", { title: "New document" });
       setActive({ id: res.doc.id, name: res.doc.name, content: STARTER });
@@ -152,7 +164,7 @@ export default function WorkspaceEditor({ params }) {
   // ---- images: upload to Drive, and resolve referenced images to base64 so the
   // cross-origin compiler can render them (cached per name to avoid refetching).
   const imageCache = useRef({});
-  const uploadImage = useCallback(async (file) => {
+  const uploadImage = useCallback(async (file, folderId = null) => {
     const base64 = await new Promise((res, rej) => {
       const r = new FileReader();
       r.onload = () => res(String(r.result).split(",")[1] || "");
@@ -162,7 +174,7 @@ export default function WorkspaceEditor({ params }) {
     const res = await fetch(`/api/workspaces/${wsId}/images`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: file.name, mime: file.type, base64 }),
+      body: JSON.stringify({ name: file.name, mime: file.type, base64, folderId }),
     }).then((r) => r.json());
     if (!res.ok) throw new Error(res.error || "Upload failed");
     imageCache.current[res.image.name] = base64;
@@ -170,8 +182,21 @@ export default function WorkspaceEditor({ params }) {
     return res.image;
   }, [wsId, load]);
 
+  const createFolder = useCallback(async () => {
+    const raw = await dialog.prompt("Folder name", { title: "New folder", defaultValue: "Chapter 1" });
+    const name = (raw || "").trim();
+    if (!name) return;
+    const res = await fetch(`/api/workspaces/${wsId}/folders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    }).then((r) => r.json());
+    if (!res.ok) return dialog.alert(res.error || "Couldn’t create folder", { title: "New folder" });
+    load();
+  }, [wsId, load, dialog]);
+
   const resolveImages = useCallback(async (names) => {
-    const list = state.ws?.images || [];
+    const list = flattenTree(state.tree).images;
     const out = [];
     for (const name of names) {
       if (imageCache.current[name]) { out.push({ name, base64: imageCache.current[name] }); continue; }
@@ -202,11 +227,11 @@ export default function WorkspaceEditor({ params }) {
         plan={account.tier}
         onSaveDoc={saveDoc}
         onUpgrade={upgrade}
-        docs={ws.docs}
+        tree={state.tree}
         onOpenDoc={openDoc}
         onNewDoc={newDoc}
-        images={ws.images || []}
         onUploadImage={uploadImage}
+        onCreateFolder={createFolder}
         onResolveImages={resolveImages}
       />
     );
@@ -214,7 +239,8 @@ export default function WorkspaceEditor({ params }) {
 
   // document chooser
   const free = account.tier !== "premium";
-  const sortedDocs = [...ws.docs].sort((a, b) => {
+  const allDocs = flattenTree(state.tree).docs;
+  const sortedDocs = [...allDocs].sort((a, b) => {
     if (sort === "name") return a.name.localeCompare(b.name);
     if (sort === "pages") return (b.pages || 0) - (a.pages || 0);
     return (Date.parse(b.updatedAt || "") || 0) - (Date.parse(a.updatedAt || "") || 0);
@@ -233,14 +259,17 @@ export default function WorkspaceEditor({ params }) {
           <div>
             <h1>{ws.name}</h1>
             <p className="studio-sub">
-              {ws.docs.length} {ws.docs.length === 1 ? "document" : "documents"}
+              {allDocs.length} {allDocs.length === 1 ? "document" : "documents"}
               {free ? ` · free max ${state.limits.docsPerWorkspace} (×5 pages)` : ""}
             </p>
           </div>
-          <Btn className="cta" onClick={newDoc}>+ New document</Btn>
+          <div className="studio-head-actions">
+            <Btn className="ghost-btn" onClick={createFolder}>+ Folder</Btn>
+            <Btn className="cta" onClick={() => newDoc()}>+ New document</Btn>
+          </div>
         </div>
 
-        {ws.docs.length > 0 && (
+        {allDocs.length > 0 && (
           <ViewToolbar view={view} onView={setView} sort={sort} onSort={setSort} sorts={DOC_SORTS} />
         )}
 

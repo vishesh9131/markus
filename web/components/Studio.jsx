@@ -18,6 +18,25 @@ import { exportPdfWithPreference } from "../lib/pdfExport";
 
 const PdfViewer = dynamic(() => import("./PdfViewer"), { ssr: false });
 
+const DocGlyph = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M4 1.6h5L12.4 5v9.4a.5.5 0 0 1-.5.5H4a.5.5 0 0 1-.5-.5V2.1c0-.3.2-.5.5-.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+    <path d="M8.8 1.8V5h3.2" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+  </svg>
+);
+const ImgGlyph = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+    <circle cx="5.5" cy="6.5" r="1" fill="currentColor" />
+    <path d="M3 12l3.5-3.5 2.5 2.5L11 9l2 2" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinejoin="round" />
+  </svg>
+);
+const FolderGlyph = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M1.6 4.4h4.2l1.2 1.3h7.4v7.5H1.6z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+  </svg>
+);
+
 const DEBOUNCE_MS = 350;
 const AUTOSAVE_MS = 1200;
 const STORAGE_KEY = "markus-studio-doc";
@@ -64,11 +83,11 @@ export default function Studio({
   plan = "free",
   onSaveDoc = null,
   onUpgrade = null,
-  docs = null,
+  tree = null,
   onOpenDoc = null,
   onNewDoc = null,
-  images = null,
   onUploadImage = null,
+  onCreateFolder = null,
   onResolveImages = null,
 }) {
   const persistent = Boolean(onSaveDoc);
@@ -107,6 +126,7 @@ export default function Studio({
   const cmViewRef = useRef(null);
   const resolveImagesRef = useRef(onResolveImages);
   const fileInputRef = useRef(null);
+  const uploadTargetRef = useRef(null);
 
   useEffect(() => {
     const start =
@@ -374,18 +394,39 @@ export default function Studio({
     compile({ fast: true });
   };
 
-  const pickImage = () => fileInputRef.current?.click();
+  const baseName = (n) => n.replace(/\.[^.]+$/, "");
+  const pickImage = (folderId = null) => {
+    uploadTargetRef.current = folderId || null;
+    fileInputRef.current?.click();
+  };
   const onImageFile = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = ""; // allow re-picking the same file
     if (!file || !onUploadImage) return;
     try {
-      const img = await onUploadImage(file);
-      if (img?.name) insertAtCursor(`![${img.name.replace(/\.[^.]+$/, "")}](${img.name})`);
+      const img = await onUploadImage(file, uploadTargetRef.current);
+      if (img?.name) insertAtCursor(`![${baseName(img.name)}](${img.name})`);
     } catch (err) {
       dialog.alert(String(err?.message || err), { title: "Upload failed" });
     }
   };
+
+  const renderDocLi = (d) => (
+    <li key={d.id}>
+      <button className={`rail-file ${d.id === docId ? "active" : ""}`} onClick={() => d.id !== docId && onOpenDoc && onOpenDoc(d.id)} title={d.name}>
+        <DocGlyph />
+        <span className="rail-file-name">{d.name}</span>
+      </button>
+    </li>
+  );
+  const renderImgLi = (im) => (
+    <li key={im.id}>
+      <button className="rail-file" onClick={() => insertAtCursor(`![${baseName(im.name)}](${im.name})`)} title={`Insert ${im.name}`}>
+        <ImgGlyph />
+        <span className="rail-file-name">{im.name}</span>
+      </button>
+    </li>
+  );
 
   const download = (kind) => {
     if (kind === "pdf" && pdfData) {
@@ -523,7 +564,7 @@ export default function Studio({
       </div>
 
       <div className="main">
-        {persistent && Array.isArray(docs) && (
+        {persistent && tree && (
           <div className={`file-rail ${railOpen ? "open" : "closed"}`}>
             <div className="file-rail-head">
               <button className="rail-toggle" onClick={() => setRailOpen((o) => !o)} title={railOpen ? "Hide files" : "Show files"} aria-label="Toggle files">
@@ -532,51 +573,42 @@ export default function Studio({
                 </svg>
               </button>
               {railOpen && <span className="rail-title">{workspaceName || "Files"}</span>}
+              {railOpen && onCreateFolder && (
+                <button className="rail-new" onClick={onCreateFolder} title="New folder" aria-label="New folder"><FolderGlyph /></button>
+              )}
               {railOpen && onNewDoc && (
-                <button className="rail-new" onClick={onNewDoc} title="New document" aria-label="New document">+</button>
+                <button className="rail-new" onClick={() => onNewDoc(null)} title="New document" aria-label="New document">+</button>
               )}
             </div>
             {railOpen && (
               <div className="rail-scroll">
-                <ul className="rail-list">
-                  {docs.map((d) => (
-                    <li key={d.id}>
-                      <button
-                        className={`rail-file ${d.id === docId ? "active" : ""}`}
-                        onClick={() => d.id !== docId && onOpenDoc && onOpenDoc(d.id)}
-                        title={d.name}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                          <path d="M4 1.6h5L12.4 5v9.4a.5.5 0 0 1-.5.5H4a.5.5 0 0 1-.5-.5V2.1c0-.3.2-.5.5-.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-                          <path d="M8.8 1.8V5h3.2" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-                        </svg>
-                        <span className="rail-file-name">{d.name}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <ul className="rail-list">{(tree.docs || []).map(renderDocLi)}</ul>
+
+                {(tree.folders || []).map((fol) => (
+                  <div className="rail-folder" key={fol.id}>
+                    <div className="rail-section rail-folder-head">
+                      <FolderGlyph />
+                      <span>{fol.name}</span>
+                      {onNewDoc && <button className="rail-new" onClick={() => onNewDoc(fol.id)} title="New document here" aria-label="New document">+</button>}
+                      {onUploadImage && <button className="rail-new" onClick={() => pickImage(fol.id)} title="Upload image here" aria-label="Upload image"><ImgGlyph /></button>}
+                    </div>
+                    <ul className="rail-list rail-nested">
+                      {(fol.docs || []).map(renderDocLi)}
+                      {(fol.images || []).map(renderImgLi)}
+                      {(fol.docs || []).length === 0 && (fol.images || []).length === 0 && <li className="rail-empty">empty</li>}
+                    </ul>
+                  </div>
+                ))}
 
                 <div className="rail-section">
                   <span>Images</span>
-                  {onUploadImage && (
-                    <button className="rail-new" onClick={pickImage} title="Upload image" aria-label="Upload image">+</button>
-                  )}
+                  {onUploadImage && <button className="rail-new" onClick={() => pickImage(null)} title="Upload image" aria-label="Upload image">+</button>}
                 </div>
                 <ul className="rail-list">
-                  {(images || []).map((im) => (
-                    <li key={im.id}>
-                      <button className="rail-file" onClick={() => insertAtCursor(`![${im.name.replace(/\.[^.]+$/, "")}](${im.name})`)} title={`Insert ${im.name}`}>
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                          <rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
-                          <circle cx="5.5" cy="6.5" r="1" fill="currentColor" />
-                          <path d="M3 12l3.5-3.5 2.5 2.5L11 9l2 2" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinejoin="round" />
-                        </svg>
-                        <span className="rail-file-name">{im.name}</span>
-                      </button>
-                    </li>
-                  ))}
-                  {(!images || images.length === 0) && <li className="rail-empty">No images yet</li>}
+                  {(tree.images || []).map(renderImgLi)}
+                  {(tree.images || []).length === 0 && <li className="rail-empty">No images yet</li>}
                 </ul>
+
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={onImageFile} style={{ display: "none" }} />
               </div>
             )}

@@ -74,9 +74,9 @@ class LocalStore {
     return out;
   }
 
-  async uploadImage(wsId, { name, base64, mime }) {
+  async uploadImage(wsId, { name, base64, mime, folderId }) {
     const imgs = await this._images(wsId);
-    const meta = { id: randomUUID(), name, mime, updatedAt: new Date().toISOString() };
+    const meta = { id: randomUUID(), name, mime, folderId: folderId || null, updatedAt: new Date().toISOString() };
     imgs.push(meta);
     await this._writeImages(wsId, imgs);
     await fs.writeFile(path.join(this.dir, wsId, `img_${meta.id}`), Buffer.from(base64, "base64"));
@@ -93,6 +93,35 @@ class LocalStore {
       /* empty */
     }
     return { ...meta, base64 };
+  }
+
+  async _folders(wsId) {
+    try {
+      return JSON.parse(await fs.readFile(path.join(this.dir, wsId, "folders.json"), "utf8"));
+    } catch {
+      return [];
+    }
+  }
+
+  async createFolder(wsId, name) {
+    const folders = await this._folders(wsId);
+    const meta = { id: randomUUID(), name };
+    folders.push(meta);
+    await fs.mkdir(path.join(this.dir, wsId), { recursive: true });
+    await fs.writeFile(path.join(this.dir, wsId, "folders.json"), JSON.stringify(folders, null, 2));
+    return meta;
+  }
+
+  async tree(wsId) {
+    const docs = await this._docs(wsId);
+    const images = await this._images(wsId);
+    const folders = await this._folders(wsId);
+    const inFolder = (arr, fid) => arr.filter((x) => (x.folderId || null) === fid);
+    return {
+      docs: inFolder(docs, null),
+      images: inFolder(images, null),
+      folders: folders.map((f) => ({ id: f.id, name: f.name, docs: inFolder(docs, f.id), images: inFolder(images, f.id) })),
+    };
   }
 
   async createWorkspace(name) {
@@ -124,11 +153,11 @@ class LocalStore {
     return { ...meta, content };
   }
 
-  async saveDoc(wsId, { id, name, content, pages }) {
+  async saveDoc(wsId, { id, name, content, pages, folderId }) {
     const docs = await this._docs(wsId);
     let meta = id && docs.find((d) => d.id === id);
     if (!meta) {
-      meta = { id: id || randomUUID(), name: name || "Untitled.mks" };
+      meta = { id: id || randomUUID(), name: name || "Untitled.mks", folderId: folderId || null };
       docs.push(meta);
     }
     if (name) meta.name = name;
@@ -221,6 +250,7 @@ class DriveStore {
       const docs = [];
       const images = [];
       for (const d of files) {
+        if (d.mimeType === "application/vnd.google-apps.folder") continue; // subfolders -> tree()
         if ((d.mimeType || "").startsWith("image/")) {
           images.push({ id: d.id, name: d.name, mime: d.mimeType, updatedAt: d.modifiedTime });
         } else {
@@ -273,7 +303,7 @@ class DriveStore {
     };
   }
 
-  async saveDoc(wsId, { id, name, content, pages }) {
+  async saveDoc(wsId, { id, name, content, pages, folderId }) {
     const appProperties = typeof pages === "number" ? { markusDoc: "1", pages: String(pages) } : { markusDoc: "1" };
     const media = { mimeType: "text/plain", body: content ?? "" };
     if (id) {
@@ -286,17 +316,46 @@ class DriveStore {
       return { id: res.data.id, name: res.data.name, pages, updatedAt: res.data.modifiedTime };
     }
     const res = await this.drive.files.create({
-      requestBody: { name: name || "Untitled.mks", parents: [wsId], appProperties },
+      requestBody: { name: name || "Untitled.mks", parents: [folderId || wsId], appProperties },
       media,
       fields: "id,name,modifiedTime,appProperties",
     });
     return { id: res.data.id, name: res.data.name, pages, updatedAt: res.data.modifiedTime };
   }
 
-  async uploadImage(wsId, { name, base64, mime }) {
+  // ---- folders (one level: a workspace folder contains docs/images/folders) ----
+  async createFolder(wsId, name) {
+    const made = await this.drive.files.create({
+      requestBody: { name, mimeType: "application/vnd.google-apps.folder", parents: [wsId], appProperties: { markusFolder: "1" } },
+      fields: "id,name",
+    });
+    return { id: made.data.id, name: made.data.name };
+  }
+
+  async tree(wsId) {
+    const split = (files) => {
+      const docs = [], images = [], folders = [];
+      for (const d of files) {
+        if (d.mimeType === "application/vnd.google-apps.folder") folders.push({ id: d.id, name: d.name });
+        else if ((d.mimeType || "").startsWith("image/")) images.push({ id: d.id, name: d.name, mime: d.mimeType, updatedAt: d.modifiedTime });
+        else docs.push({ id: d.id, name: d.name, pages: d.appProperties?.pages ? Number(d.appProperties.pages) : undefined, updatedAt: d.modifiedTime });
+      }
+      return { docs, images, folders };
+    };
+    const fields = "files(id,name,mimeType,modifiedTime,appProperties)";
+    const root = split(await this._listAll({ q: `'${wsId}' in parents and trashed=false`, fields }));
+    const folders = [];
+    for (const fol of root.folders) {
+      const c = split(await this._listAll({ q: `'${fol.id}' in parents and trashed=false`, fields }));
+      folders.push({ id: fol.id, name: fol.name, docs: c.docs, images: c.images });
+    }
+    return { docs: root.docs, images: root.images, folders };
+  }
+
+  async uploadImage(wsId, { name, base64, mime, folderId }) {
     const { Readable } = await import("node:stream");
     const res = await this.drive.files.create({
-      requestBody: { name, parents: [wsId], appProperties: { markusImage: "1" } },
+      requestBody: { name, parents: [folderId || wsId], appProperties: { markusImage: "1" } },
       media: { mimeType: mime || "application/octet-stream", body: Readable.from(Buffer.from(base64, "base64")) },
       fields: "id,name,mimeType,modifiedTime",
     });
