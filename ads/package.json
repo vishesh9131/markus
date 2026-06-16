@@ -1,0 +1,17 @@
+{
+  "name": "markus-ads",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Remotion motion-graphics teasers for Markus (brutalist theme)",
+  "scripts": {
+    "studio": "remotion studio src/index.jsx",
+    "still": "remotion still src/index.jsx Teaser out/frame.png --frame=40",
+    "render": "remotion render src/index.jsx Teaser out/markus-teaser.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.477",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.477"
+  }
+}
