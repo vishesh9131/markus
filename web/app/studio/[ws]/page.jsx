@@ -243,6 +243,12 @@ export default function WorkspaceEditor({ params }) {
     }, [apiItem, load, dialog, active]),
   };
 
+  const viewImage = useCallback(async (image) => {
+    const r = await fetch(`/api/workspaces/${wsId}/images/${image.id}`).then((x) => x.json());
+    if (!r.ok) throw new Error(r.error || "Could not load image");
+    return `data:${r.mime || "image/png"};base64,${r.base64}`;
+  }, [wsId]);
+
   const resolveImages = useCallback(async (names) => {
     const list = flattenTree(state.tree).images;
     const out = [];
@@ -281,6 +287,7 @@ export default function WorkspaceEditor({ params }) {
         onUploadImage={uploadImage}
         onCreateFolder={createFolder}
         itemOps={itemOps}
+        onViewImage={viewImage}
         onResolveImages={resolveImages}
       />
     );

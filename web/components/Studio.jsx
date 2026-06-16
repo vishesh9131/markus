@@ -94,6 +94,7 @@ export default function Studio({
   onUploadImage = null,
   onCreateFolder = null,
   itemOps = null,
+  onViewImage = null,
   onResolveImages = null,
 }) {
   const persistent = Boolean(onSaveDoc);
@@ -124,6 +125,7 @@ export default function Studio({
   const [delConfirm, setDelConfirm] = useState(false);
   const [renamingId, setRenamingId] = useState(null);
   const [uploadProg, setUploadProg] = useState(null);
+  const [viewer, setViewer] = useState(null); // { name, src }
 
   const timer = useRef(null);
   const inflight = useRef(null);
@@ -445,6 +447,17 @@ export default function Studio({
     const n = (value || "").trim();
     if (n && n !== item.name) itemOps?.rename(item, n);
   };
+  const insertImage = (name) => insertAtCursor(`![${baseName(name)}](${name})`);
+  const openViewer = async (image) => {
+    if (!onViewImage) return insertImage(image.name);
+    setViewer({ name: image.name, src: null });
+    try {
+      setViewer({ name: image.name, src: await onViewImage(image) });
+    } catch (err) {
+      setViewer(null);
+      dialog.alert(String(err?.message || err), { title: "Image" });
+    }
+  };
 
   const renameRow = (item) => (
     <li key={item.id} className="rail-row">
@@ -481,7 +494,7 @@ export default function Studio({
     if (renamingId === im.id) return renameRow(item);
     return (
       <li key={im.id} className="rail-row">
-        <button className="rail-file" onClick={() => insertAtCursor(`![${baseName(im.name)}](${im.name})`)} title={`Insert ${im.name}`}>
+        <button className="rail-file" onClick={() => openViewer(im)} title={`View ${im.name}`}>
           <ImgGlyph />
           <span className="rail-file-name">{im.name}</span>
         </button>
@@ -801,6 +814,12 @@ export default function Studio({
               left: Math.min(menu.x, (typeof window !== "undefined" ? window.innerWidth : 1000) - 190),
             }}
           >
+            {menu.item.type === "image" && (
+              <>
+                <button className="rail-menu-item" onClick={() => { openViewer(menu.item); setMenu(null); }}>View</button>
+                <button className="rail-menu-item" onClick={() => { insertImage(menu.item.name); setMenu(null); }}>Insert into document</button>
+              </>
+            )}
             <button className="rail-menu-item" onClick={() => { setRenamingId(menu.item.id); setMenu(null); }}>Rename</button>
             {menu.item.type === "doc" && (
               <button className="rail-menu-item" onClick={() => { itemOps?.duplicate(menu.item); setMenu(null); }}>Duplicate</button>
@@ -824,6 +843,30 @@ export default function Studio({
             )}
           </div>
         </>
+      )}
+
+      {viewer && (
+        <div className="img-viewer" onMouseDown={() => setViewer(null)}>
+          <div className="img-viewer-box" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="img-viewer-head">
+              <span className="img-viewer-name">{viewer.name}</span>
+              <div className="img-viewer-actions">
+                <button className="ghost-btn sm" onClick={() => { insertImage(viewer.name); setViewer(null); }}>Insert into document</button>
+                <button className="icon-btn" onClick={() => setViewer(null)} aria-label="Close">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+                </button>
+              </div>
+            </div>
+            <div className="img-viewer-body">
+              {viewer.src ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={viewer.src} alt={viewer.name} />
+              ) : (
+                <div className="img-viewer-loading">Loading…</div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {uploadProg && (
