@@ -226,10 +226,17 @@ html[data-theme="dark"] .topbar select {
 }
 
 /* ---------- main split ---------- */
+.app-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .main {
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
   padding: 14px;
   gap: 0;
 }
@@ -1137,7 +1144,8 @@ html[data-theme="dark"] .paper-sheet {
 
 /* ===================== mobile-only: workspace + studio (desktop untouched) ===================== */
 @media (max-width: 760px) {
-  /* studio editor: stack the two panes instead of side-by-side */
+  /* studio editor: stack rail + the two panes vertically */
+  .app-body { flex-direction: column; }
   .main { flex-direction: column; padding: 10px; gap: 10px; }
   .pane { min-width: 0; }                 /* was 260px -> caused horizontal overflow */
   .editor-pane { flex: 0 0 46vh !important; }  /* override inline flex-basis */

@@ -583,7 +583,7 @@ export default function Studio({
         </button>
       </div>
 
-      <div className="main">
+      <div className="app-body">
         {persistent && tree && (
           <div className={`file-rail ${railOpen ? "open" : "closed"}`} style={{ "--rail-w": `${railW}px` }}>
             <div className="file-rail-head">
@@ -642,6 +642,7 @@ export default function Studio({
             title="Drag to resize"
           />
         )}
+        <div className="main">
         <div className="pane editor-pane" style={{ flexBasis: `${split}%`, flexGrow: 0, flexShrink: 0 }}>
           <div className="pane-head">source · .mks</div>
           <div className="editor-wrap">
@@ -723,6 +724,7 @@ export default function Studio({
           </div>
 
           {error && tab !== "problems" && <div className="errorbar">{error.split("\n")[0]}</div>}
+        </div>
         </div>
       </div>
     </div>
