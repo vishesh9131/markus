@@ -1393,9 +1393,11 @@ svg { flex-shrink: 0; }
 .file-grid.view-list { display: flex; flex-direction: column; gap: 2px; }
 .file-grid.view-list .file-card { flex-direction: row; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid transparent; border-radius: 8px; }
 .file-grid.view-list .file-card:hover { background: var(--surface-2); border-color: var(--line); }
-.file-grid.view-list .file-card-thumb { width: 42px; height: 54px; aspect-ratio: auto; flex-shrink: 0; padding: 5px; border-radius: 4px; }
-.file-grid.view-list .file-card-thumb .doc-thumb { max-width: none; width: 100%; height: 100%; aspect-ratio: auto; }
+.file-grid.view-list .file-card-thumb { width: 38px; height: 48px; aspect-ratio: auto; flex-shrink: 0; padding: 0; border-radius: 4px; overflow: hidden; }
+.file-grid.view-list .file-card-thumb .doc-thumb { max-width: none; width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; padding: 3px; }
 .file-grid.view-list .doc-thumb-title { display: none; }
+.file-grid.view-list .file-icon { display: none; } /* thumbnail is the row icon — no double glyph */
+.file-grid.view-list .file-card-thumb.add .add-plus { width: 28px; height: 28px; font-size: 16px; }
 .file-grid.view-list .file-card-foot { padding: 0; flex: 1; }
 
 /* ===================== motion: page transitions + micro-interactions ===================== */
