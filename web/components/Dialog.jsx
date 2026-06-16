@@ -91,10 +91,7 @@ export function DialogProvider({ children }) {
               />
             )}
             {dlg.kind === "choose" ? (
-              <div className="mk-dialog-actions">
-                <button className="ghost-btn" onClick={cancel}>
-                  {dlg.cancelText}
-                </button>
+              <div className="mk-dialog-actions choose">
                 {dlg.options.map((o, i) => (
                   <button
                     key={o.value}
@@ -105,6 +102,9 @@ export function DialogProvider({ children }) {
                     {o.label}
                   </button>
                 ))}
+                <button className="ghost-btn mk-choose-cancel" onClick={cancel}>
+                  {dlg.cancelText}
+                </button>
               </div>
             ) : (
               <div className="mk-dialog-actions">

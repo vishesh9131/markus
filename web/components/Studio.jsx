@@ -119,6 +119,7 @@ export default function Studio({
   const [waking, setWaking] = useState(false);
   const [hintsOpen, setHintsOpen] = useState(true);
   const [railOpen, setRailOpen] = useState(true);
+  const [railW, setRailW] = useState(212);
 
   const timer = useRef(null);
   const inflight = useRef(null);
@@ -130,6 +131,8 @@ export default function Studio({
   const dirtyRef = useRef(false);
   const saveRef = useRef(null);
   const cmViewRef = useRef(null);
+  const railDrag = useRef(false);
+  const railLeft = useRef(0);
   const resolveImagesRef = useRef(onResolveImages);
   const fileInputRef = useRef(null);
   const uploadTargetRef = useRef(null);
@@ -459,11 +462,16 @@ export default function Studio({
 
   useEffect(() => {
     const move = (e) => {
+      if (railDrag.current) {
+        setRailW(Math.min(460, Math.max(150, e.clientX - railLeft.current)));
+        return;
+      }
       if (!dragging.current) return;
       setSplit(Math.min(80, Math.max(20, (e.clientX / window.innerWidth) * 100)));
     };
     const up = () => {
       dragging.current = false;
+      railDrag.current = false;
       document.body.style.cursor = "";
     };
     window.addEventListener("mousemove", move);
@@ -577,7 +585,7 @@ export default function Studio({
 
       <div className="main">
         {persistent && tree && (
-          <div className={`file-rail ${railOpen ? "open" : "closed"}`}>
+          <div className={`file-rail ${railOpen ? "open" : "closed"}`} style={{ "--rail-w": `${railW}px` }}>
             <div className="file-rail-head">
               <button className="rail-toggle" onClick={() => setRailOpen((o) => !o)} title={railOpen ? "Hide files" : "Show files"} aria-label="Toggle files">
                 <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -588,13 +596,22 @@ export default function Studio({
               {railOpen && onCreateFolder && (
                 <button className="rail-new" onClick={onCreateFolder} title="New folder" aria-label="New folder"><FolderGlyph /></button>
               )}
+              {railOpen && onUploadImage && (
+                <button className="rail-new" onClick={() => pickImage(null)} title="Upload image" aria-label="Upload image"><ImgGlyph /></button>
+              )}
               {railOpen && onNewDoc && (
                 <button className="rail-new" onClick={() => onNewDoc(null)} title="New document" aria-label="New document">+</button>
               )}
             </div>
             {railOpen && (
               <div className="rail-scroll">
-                <ul className="rail-list">{(tree.docs || []).map((d) => renderDocLi(d, null))}</ul>
+                <ul className="rail-list">
+                  {(tree.docs || []).map((d) => renderDocLi(d, null))}
+                  {(tree.images || []).map((im) => renderImgLi(im, null))}
+                  {(tree.docs || []).length === 0 && (tree.images || []).length === 0 && (tree.folders || []).length === 0 && (
+                    <li className="rail-empty">No files yet</li>
+                  )}
+                </ul>
 
                 {(tree.folders || []).map((fol) => (
                   <div className="rail-folder" key={fol.id}>
@@ -613,19 +630,17 @@ export default function Studio({
                   </div>
                 ))}
 
-                <div className="rail-section">
-                  <span>Images</span>
-                  {onUploadImage && <button className="rail-new" onClick={() => pickImage(null)} title="Upload image" aria-label="Upload image">+</button>}
-                </div>
-                <ul className="rail-list">
-                  {(tree.images || []).map((im) => renderImgLi(im, null))}
-                  {(tree.images || []).length === 0 && <li className="rail-empty">No images yet</li>}
-                </ul>
-
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={onImageFile} style={{ display: "none" }} />
               </div>
             )}
           </div>
+        )}
+        {persistent && tree && railOpen && (
+          <div
+            className="rail-resizer"
+            onMouseDown={(e) => { railDrag.current = true; railLeft.current = e.clientX - railW; document.body.style.cursor = "col-resize"; }}
+            title="Drag to resize"
+          />
         )}
         <div className="pane editor-pane" style={{ flexBasis: `${split}%`, flexGrow: 0, flexShrink: 0 }}>
           <div className="pane-head">source · .mks</div>

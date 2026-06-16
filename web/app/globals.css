@@ -747,8 +747,11 @@ html[data-theme="dark"] .topbar select {
 .legal-prose pre code { background: none; border: none; padding: 0; font-size: inherit; }
 
 /* file rail (Overleaf-style file list inside the editor) */
-.file-rail { flex: 0 0 212px; display: flex; flex-direction: column; min-width: 0; background: var(--surface-2); border-right: 1px solid var(--line); }
-.file-rail.closed { flex-basis: 40px; }
+.file-rail { display: flex; flex-direction: column; min-width: 0; background: var(--surface-2); border-right: 1px solid var(--line); }
+.file-rail.open { flex: 0 0 var(--rail-w, 212px); }
+.file-rail.closed { flex: 0 0 40px; }
+.rail-resizer { flex: 0 0 6px; cursor: col-resize; background: transparent; transition: background 0.12s ease; }
+.rail-resizer:hover { background: var(--line-strong); }
 .file-rail-head { display: flex; align-items: center; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); }
 .rail-toggle, .rail-new {
   display: inline-flex; align-items: center; justify-content: center;
@@ -784,8 +787,9 @@ html[data-theme="dark"] .topbar select {
 .rail-file.active svg { color: var(--ink); }
 .rail-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 760px) {
-  .file-rail { flex: 0 0 auto; max-height: 132px; border-right: none; border-bottom: 1px solid var(--line); }
-  .file-rail.closed { flex-basis: auto; max-height: 40px; }
+  .file-rail, .file-rail.open { flex: 0 0 auto; max-height: 160px; border-right: none; border-bottom: 1px solid var(--line); }
+  .file-rail.closed { flex: 0 0 auto; max-height: 40px; }
+  .rail-resizer { display: none; }
 }
 
 /* live suggestions panel (editor pane) */
@@ -986,9 +990,14 @@ html[data-theme="dark"] .topbar select {
 .mk-dialog-actions {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 20px;
 }
+/* action menus (choose) stack vertically so they never overflow the dialog */
+.mk-dialog-actions.choose { flex-direction: column; align-items: stretch; gap: 8px; }
+.mk-dialog-actions.choose button { width: 100%; justify-content: center; }
+.mk-dialog-actions.choose .mk-choose-cancel { margin-top: 4px; opacity: 0.8; }
 .cta.danger {
   background: var(--red);
   border-color: var(--red);
