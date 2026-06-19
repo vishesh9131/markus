@@ -127,12 +127,15 @@ export default function WorkspaceEditor({ params }) {
     // first edit — otherwise a brand-new doc lives only in memory and is lost.
     setOpening(true);
     try {
-      const res = await fetch(`/api/workspaces/${wsId}/docs`, {
+      const r = await fetch(`/api/workspaces/${wsId}/docs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: docName, content: STARTER, pages: 0, folderId }),
-      }).then((r) => r.json());
-      if (!res.ok) return dialog.alert(res.error || "Couldn’t create the document.", { title: "New document" });
+      });
+      const res = await r.json().catch(() => null);
+      if (!res || !res.ok) {
+        return dialog.alert(res?.error || `Couldn’t create the document (HTTP ${r.status}). Try again.`, { title: "New document" });
+      }
       setActive({ id: res.doc.id, name: res.doc.name, content: STARTER });
       load(); // refresh so the new file shows in the rail
     } catch {

@@ -200,6 +200,10 @@ class LocalStore {
     return { ...ws, docs: [] };
   }
 
+  async countDocs(wsId) {
+    return (await this._docs(wsId)).length;
+  }
+
   async deleteWorkspace(id) {
     const idx = await this._index();
     idx.workspaces = idx.workspaces.filter((w) => w.id !== id);
@@ -346,6 +350,14 @@ class DriveStore {
       fields: "id,name,createdTime",
     });
     return { id: made.data.id, name: made.data.name, createdAt: made.data.createdTime, docs: [] };
+  }
+
+  // Cheap top-level doc count for the quota check (one Drive call, this ws only).
+  async countDocs(wsId) {
+    const files = await this._listAll({ q: `'${wsId}' in parents and trashed=false`, fields: "files(id,mimeType)" });
+    return files.filter(
+      (f) => f.mimeType !== "application/vnd.google-apps.folder" && !(f.mimeType || "").startsWith("image/")
+    ).length;
   }
 
   async deleteWorkspace(id) {

@@ -26,20 +26,23 @@ export async function POST(request, { params }) {
     const body = await request.json().catch(() => ({}));
     const { id, name, content, pages, folderId } = body;
 
-    const all = await store.listWorkspaces();
-    const ws = all.find((w) => w.id === wsId);
-    if (!ws) return Response.json({ ok: false, error: "Workspace not found" }, { status: 404 });
-
-    const isNew = !id || !ws.docs.some((d) => d.id === id);
-    if (isNew && ws.docs.length >= limits.docsPerWorkspace) {
-      return Response.json(
-        {
-          ok: false,
-          code: "DOC_LIMIT",
-          error: `Free plan allows ${limits.docsPerWorkspace} documents per workspace. Upgrade for unlimited.`,
-        },
-        { status: 402 }
-      );
+    // Only the doc-count quota needs a listing, and only when creating a new doc
+    // on a limited (free) plan. Autosave (id present) and premium skip it — the
+    // old code listed every workspace on every save, which timed out and
+    // surfaced as "network error" when creating files.
+    const isNew = !id;
+    if (isNew && Number.isFinite(limits.docsPerWorkspace)) {
+      const count = await store.countDocs(wsId);
+      if (count >= limits.docsPerWorkspace) {
+        return Response.json(
+          {
+            ok: false,
+            code: "DOC_LIMIT",
+            error: `Free plan allows ${limits.docsPerWorkspace} documents per workspace. Upgrade for unlimited.`,
+          },
+          { status: 402 }
+        );
+      }
     }
     // The page cap is advisory: never reject the save (that would throw away the
     // user's writing). We persist the content and just flag when it's over the
